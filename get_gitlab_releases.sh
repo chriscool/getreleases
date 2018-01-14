@@ -1,5 +1,7 @@
 #!/bin/sh
 
+releases="$1"
+
 gitlab_releases="https://about.gitlab.com/blog/categories/release/"
 
 die () {
@@ -7,13 +9,18 @@ die () {
 	exit 1
 }
 
-tmpdir=$(mktemp -d) || die "Failed to create temp dir using mktemp."
+if test -z "$releases"
+then
+	tmpdir=$(mktemp -d) || die "Failed to create temp dir using mktemp."
 
-wget "$gitlab_releases" -O "$tmpdir/gitlab_releases.html" ||
-	die "Failed to wget '$gitlab_releases'."
+	releases="$tmpdir/gitlab_releases.html"
+
+	wget "$gitlab_releases" -O "$releases" ||
+		die "Failed to wget '$gitlab_releases'."
+fi
 
 perl -ne '@a = m/href="(\/\d+\/\d+\/\d+\/gitlab-[\d-]+-released\/)">([^<]+)</gsm;
      while (my ($u, $v) = splice (@a, 0, 2)) {
          $v =~ s/\s+$//;
          print "[$v](https://about.gitlab.com/$u)\n";
-     }' "$tmpdir/gitlab_releases.html"
+     }' "$releases"
