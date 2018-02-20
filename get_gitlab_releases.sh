@@ -19,8 +19,8 @@ then
 		die "Failed to wget '$gitlab_releases'."
 fi
 
-perl -ne '@a = m/href="(\/\d+\/\d+\/\d+\/gitlab-[\d-]+-released\/)">([^<]+)</gsm;
+perl -ne '@a = m/href="(\/\d+\/\d+\/\d+\/gitlab-[^\/]+\/)">([^<]+)</gsm;
      while (my ($u, $v) = splice (@a, 0, 2)) {
          $v =~ s/\s+$//;
-         print "[$v](https://about.gitlab.com/$u)\n";
+         print "[$v](https://about.gitlab.com$u)\n";
      }' "$releases"
