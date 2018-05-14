@@ -132,22 +132,25 @@ class Gitlab(HtmlPage):
 
     def __init__(self, last_date, limit=10):
         HtmlPage.__init__(self,
-                          'https://about.gitlab.com/blog/categories/release/',
+                          'https://about.gitlab.com/blog/categories/releases/',
                           last_date, limit)
 
     def _get_releases(self):
-        section = self._soup.find_all('div', 'section')[0]
-        links = section.find_all('a', limit=self._limit)
+        section = self._soup.find_all('div', 'articles')[0]
+        links = section.find_all('div', 'article', limit=self._limit)
 
         for rel in links:
             if self._last_date:
-                rel_date_str = rel.next_sibling.text.strip()
+                rel_date_str = rel.find_all('div', 'date')[0].text.strip()
                 rel_date = datetime.datetime.strptime(rel_date_str, '%b %d, %Y')
 
                 if rel_date < self._last_date:
                     break
 
-            text = re.findall(r'(\d{2}\.\d(\.\d)?)', rel.text)
+            text = re.findall(r'(\d{2}\.\d(\.\d)?)', rel.h2.text)
+
+            if not text:
+                continue
 
             version = ''
             for j, stuff in enumerate(text):
@@ -156,7 +159,7 @@ class Gitlab(HtmlPage):
                 else:
                     version += stuff[0]
 
-            self._releases.update({version: rel.get('href')})
+            self._releases.update({version: rel.a.get('href')})
 
 
 class Bitbucket(HtmlPage):
