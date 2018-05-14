@@ -7,6 +7,7 @@ Currently supports : Git, Git for Windows, libgit2, libgit2sharp, Github
 Enterprise, Gitlab, Bitbucket, GitKraken, Github Desktop, tig
 """
 
+import argparse
 import datetime
 import re
 from urllib.parse import urljoin
@@ -14,12 +15,19 @@ import requests
 
 from bs4 import BeautifulSoup
 
+PARSER = argparse.ArgumentParser()
+PARSER.add_argument('-s', '--since', help='Get releases since that date. Format: YYYY-MM-DD.')
+PARSER.add_argument('-u', '--user', help='Github API user')
+PARSER.add_argument('-p', '--password', help='Github API password')
+
+ARGS = PARSER.parse_args()
+
 TODAY = datetime.date.today()
 DATE = TODAY - datetime.timedelta(days=30)
-DATE = DATE.strftime('%Y-%m-%d')
+DATE = ARGS.since if ARGS.since else DATE.strftime('%Y-%m-%d')
 
-GITHUB_API_USER = 'user'
-GITHUB_API_PASS = 'password'
+GITHUB_API_USER = ARGS.user if ARGS.user else 'user'
+GITHUB_API_PASS = ARGS.password if ARGS.password else 'password'
 
 class Releases():
 
