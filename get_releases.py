@@ -14,7 +14,12 @@ import requests
 
 from bs4 import BeautifulSoup
 
-DATE = "2018-02-21"
+TODAY = datetime.date.today()
+DATE = TODAY - datetime.timedelta(days=30)
+DATE = DATE.strftime('%Y-%m-%d')
+
+GITHUB_API_USER = 'user'
+GITHUB_API_PASS = 'password'
 
 class Releases():
 
@@ -216,15 +221,20 @@ class GitKraken(HtmlPage):
 
 class GithubTags(Releases):
 
-    def __init__(self, repo, regex, last_date, limit=10):
+    def __init__(self, user, password, repo, regex, last_date, limit=10):
         Releases.__init__(self, last_date, limit)
+
+        self._api_user = user
+        self._api_pass = password
 
         self._api = 'https://api.github.com/repos/' + repo + '/tags'
         self._url = 'https://github.com/' + repo + '/releases/tag/'
         self._regex = regex
 
+        self._get_releases()
+
     def _get_releases(self):
-        request = requests.get(self._api)
+        request = requests.get(self._api, auth=(self._api_user, self._api_pass))
 
         if not request.ok:
             print('Error {} while querying Github API'.format(request.status_code))
@@ -238,7 +248,8 @@ class GithubTags(Releases):
                     continue
 
                 if self._last_date:
-                    sha_req = requests.get(tag['commit']['url'])
+                    sha_req = requests.get(tag['commit']['url'],
+                                           auth=(self._api_user, self._api_pass))
 
                     if sha_req.ok:
                         sha = sha_req.json()
@@ -263,15 +274,19 @@ gitkraken = GitKraken(DATE)
 tig = PublicInbox(re.compile(r'^\[ANNOUNCE\] tig-(.*)$'), DATE)
 git = PublicInbox(re.compile(r'^\[ANNOUNCE\] Git v(.*)$'), DATE)
 
-github_desktop = GithubTags('desktop/desktop',
+github_desktop = GithubTags(GITHUB_API_USER, GITHUB_API_PASS,
+                            'desktop/desktop',
                             re.compile(r'^release-(\d\.\d\.\d+)$'), DATE)
 
-git_windows = GithubTags('git-for-windows/git',
+git_windows = GithubTags(GITHUB_API_USER, GITHUB_API_PASS,
+                         'git-for-windows/git',
                          re.compile(r'^v(\d\.\d+\.\d+)\.windows\.(\d)$'), DATE)
 
-libgit2 = GithubTags('libgit2/libgit2', re.compile(r'^v(\d\.\d+\.\d+)$'), DATE)
+libgit2 = GithubTags(GITHUB_API_USER, GITHUB_API_PASS,
+                     'libgit2/libgit2', re.compile(r'^v(\d\.\d+\.\d+)$'), DATE)
 
-libgit2sharp = GithubTags('libgit2/libgit2sharp',
+libgit2sharp = GithubTags(GITHUB_API_USER, GITHUB_API_PASS,
+                          'libgit2/libgit2sharp',
                           re.compile(r'^v(\d\.\d+\.?\d*)$'), DATE)
 
 with open('releases.md', 'w') as f:
