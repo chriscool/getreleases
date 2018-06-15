@@ -75,6 +75,8 @@ class Releases():
 class HtmlPage(Releases):
 
     def __init__(self, url, last_date, limit=10):
+        print('Getting releases from HTML page: {}'.format(url))
+
         Releases.__init__(self, last_date, limit)
         self._url = url
         self._soup = self._get_soup()
@@ -230,6 +232,7 @@ class GitKraken(HtmlPage):
 class GithubTags(Releases):
 
     def __init__(self, user, password, repo, regex, last_date, limit=10):
+        print('Getting releases from Github repo: {}'.format(repo))
         Releases.__init__(self, last_date, limit)
 
         self._api_user = user
@@ -275,41 +278,44 @@ class GithubTags(Releases):
 
                 self._releases.update({version: self._url + tag['name']})
 
-github_enterprise = GithubEnterprise(DATE)
-gitlab = Gitlab(DATE)
-bitbucket = Bitbucket(DATE)
-gitkraken = GitKraken(DATE)
-tig = PublicInbox(re.compile(r'^\[ANNOUNCE\] tig-(.*)$'), DATE)
-git = PublicInbox(re.compile(r'^\[ANNOUNCE\] Git v(.*)$'), DATE)
+print('\nGetting releases since {}\n---------------------------------\n'.format(DATE))
 
-github_desktop = GithubTags(GITHUB_API_USER, GITHUB_API_PASS,
-                            'desktop/desktop',
-                            re.compile(r'^release-(\d\.\d\.\d+)$'), DATE)
+RELEASES = {
+    'Git': PublicInbox(re.compile(r'^\[ANNOUNCE\] Git v(.*)$'), DATE),
+    'Git for Windows': GithubTags(GITHUB_API_USER, GITHUB_API_PASS,
+                                  'git-for-windows/git',
+                                  re.compile(r'^v(\d\.\d+\.\d+)\.windows\.(\d)$'),
+                                  DATE),
+    'libgit2': GithubTags(GITHUB_API_USER, GITHUB_API_PASS, 'libgit2/libgit2',
+                          re.compile(r'^v(\d\.\d+\.\d+)$'), DATE),
+    'libgit2sharp': GithubTags(GITHUB_API_USER, GITHUB_API_PASS,
+                               'libgit2/libgit2sharp',
+                               re.compile(r'^v(\d\.\d+\.?\d*)$'), DATE),
+    'Github Enterprise': GithubEnterprise(DATE),
+    'Gitlab': Gitlab(DATE),
+    'Bitbucket': Bitbucket(DATE),
+    'GitKraken': GitKraken(DATE),
+    'Github Desktop': GithubTags(GITHUB_API_USER, GITHUB_API_PASS,
+                                 'desktop/desktop',
+                                 re.compile(r'^release-(\d\.\d\.\d+)$'), DATE),
+    'tig': PublicInbox(re.compile(r'^\[ANNOUNCE\] tig-(.*)$'), DATE)
+}
 
-git_windows = GithubTags(GITHUB_API_USER, GITHUB_API_PASS,
-                         'git-for-windows/git',
-                         re.compile(r'^v(\d\.\d+\.\d+)\.windows\.(\d)$'), DATE)
+RESULT = '# Releases\n\n'
 
-libgit2 = GithubTags(GITHUB_API_USER, GITHUB_API_PASS,
-                     'libgit2/libgit2', re.compile(r'^v(\d\.\d+\.\d+)$'), DATE)
+print('Formatting releases...')
 
-libgit2sharp = GithubTags(GITHUB_API_USER, GITHUB_API_PASS,
-                          'libgit2/libgit2sharp',
-                          re.compile(r'^v(\d\.\d+\.?\d*)$'), DATE)
+for name, releases in RELEASES.items():
+    if name == 'Github Desktop':
+        RESULT += releases.markdown(name,
+                                    url='https://desktop.github.com/release-notes/',
+                                    replace_url=True)
+    else:
+        RESULT += releases.markdown(name)
+
+print('Writing to releases.md...')
 
 with open('releases.md', 'w') as f:
-    f.write('# Releases\n\n')
+    f.write(RESULT)
 
-    f.write(git.markdown('Git'))
-    f.write(git_windows.markdown('Git for Windows'))
-
-    f.write(libgit2.markdown('libgit2'))
-    f.write(libgit2sharp.markdown('libgit2sharp'))
-
-    f.write(github_enterprise.markdown('Github Enterprise'))
-    f.write(gitlab.markdown('Gitlab'))
-    f.write(bitbucket.markdown('Bitbucket'))
-
-    f.write(gitkraken.markdown('GitKraken'))
-    f.write(github_desktop.markdown('Github Desktop', 'https://desktop.github.com/', True))
-    f.write(tig.markdown('tig'))
+print('Done!')
