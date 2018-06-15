@@ -16,9 +16,9 @@ import requests
 from bs4 import BeautifulSoup
 
 PARSER = argparse.ArgumentParser()
-PARSER.add_argument('-s', '--since', help='Get releases since that date. Format: YYYY-MM-DD.')
-PARSER.add_argument('-u', '--user', help='Github API user')
-PARSER.add_argument('-p', '--password', help='Github API password')
+PARSER.add_argument('-s', '--since', help='Get releases since that date. Format: YYYY-MM-DD. Default is 30 days before today.')
+PARSER.add_argument('-u', '--user', help='Github API user (required for Github repos).')
+PARSER.add_argument('-p', '--password', help='Github API password (required for Github repos).')
 
 ARGS = PARSER.parse_args()
 
