@@ -22,226 +22,187 @@ PARSER.add_argument('-p', '--password', help='Github API password (required for 
 
 ARGS = PARSER.parse_args()
 
-TODAY = datetime.date.today()
-DATE = TODAY - datetime.timedelta(days=30)
-DATE = ARGS.since if ARGS.since else DATE.strftime('%Y-%m-%d')
+if ARGS.since:
+    DATE = datetime.datetime.strptime(ARGS.since, '%Y-%m-%d').date()
+else:
+    DATE = datetime.date.today() - datetime.timedelta(days=30)
 
-GITHUB_API_USER = ARGS.user if ARGS.user else 'user'
-GITHUB_API_PASS = ARGS.password if ARGS.password else 'password'
+def get_date(string, fmt):
+    string = re.sub(r'(\d)(th|st|nd)', '\\1', string)
+    return datetime.datetime.strptime(string, fmt).date()
 
 class Releases():
 
-    def __init__(self, last_date, limit=10):
-        self._last_date = last_date
-        self._limit = limit
-
-        self._releases = dict()
-
-        if isinstance(last_date, str):
-            self._process_date()
-
-    def _process_date(self):
-        date = [int(d) for d in self._last_date.split('-')]
-        self._last_date = datetime.datetime(*date)
-
-    def _get_releases(self):
+    def __init__(self):
+        self._last_date = DATE
         self._releases = dict()
 
     def _fmt_releases(self, title, url='', replace_url=False):
         if not self._releases:
             return ''
 
-        result = '+ ' + title + ' '
+        result = '+ {} '.format(title)
+        fmt = '[v{}]({})'
 
         for i, (version, href) in enumerate(self._releases.items()):
-
             if i > 0:
                 result += ', '
 
-            result += '[v' + version + ']'
-
-            if replace_url:
-                result += '(' + url + ')'
-            else:
-                result += '(' + urljoin(url, href) + ')'
+            href = url if replace_url else urljoin(url, href)
+            result += fmt.format(version, href)
 
         return result + '\n'
 
-    def markdown(self, title, url='', replace_url=False):
-        self._get_releases()
-        return self._fmt_releases(title, url, replace_url)
-
-
 class HtmlPage(Releases):
 
-    def __init__(self, url, last_date, limit=10):
-        print('Getting releases from HTML page: {}'.format(url))
+    def __init__(self, url, pattern=r'(\d+\.\d+\.?\d*)'):
+        Releases.__init__(self)
 
-        Releases.__init__(self, last_date, limit)
         self._url = url
         self._soup = self._get_soup()
+        self._pattern = re.compile(pattern)
 
     def _get_soup(self):
+        print('> Requesting {}'.format(self._url))
         request = requests.get(self._url)
 
         if request.ok:
             soup = BeautifulSoup(request.text, 'html.parser')
         else:
-            print('Error {} requesting {}'.format(request.status_code, self._url))
+            print('Error {}'.format(request.status_code))
             soup = None
 
         return soup
 
     def markdown(self, title):
-        self._get_releases()
         return self._fmt_releases(title, self._url)
 
 
-class PublicInbox(HtmlPage):
+class HtmlNestedPage(HtmlPage):
 
-    def __init__(self, regex, last_date, limit=10):
-        self._regex = regex
-        self._last_date = last_date
-        self._process_date()
+    def __init__(self, url, pattern=r'(\d+\.\d+\.?\d*)',
+                 parent=None, date=None, releases=None):
+        HtmlPage.__init__(self, url, pattern)
 
-        url = 'https://public-inbox.org/git/?q='
+        self._parent = parent
+        self._date = date
+        self._rel = releases
 
-        if last_date:
-            url += 'd%3A'
-            url += self._last_date.strftime('%Y%m%d')
-            url += '..+'
-        url += '%5BANNOUNCE%5D'
-
-        HtmlPage.__init__(self, url, last_date, limit)
+        self._get_releases()
 
     def _get_releases(self):
-        emails = self._soup.find_all('a', text=self._regex, limit=self._limit)
+        if not self._soup:
+            return
 
-        if emails:
-            for email in emails:
-                email_text = re.search(self._regex, email.text)
+        if self._parent:
+            self._get_releases_in_parent()
+        else:
+            self._extract_releases(self._soup)
 
-                self._releases.update({email_text.group(1): email.get('href')})
+    def _get_releases_in_parent(self):
+        parents = self._soup.find_all(*self._parent)
 
+        for parent in parents:
+            if self._date:
+                dates = parent.find_all(*self._date['elt'])
 
-class GithubEnterprise(HtmlPage):
+                for date in dates:
+                    string = date.text.strip()
 
-    def __init__(self, last_date, limit=10):
-        HtmlPage.__init__(self, 'https://enterprise.github.com/releases/',
-                          last_date, limit)
+                    try:
+                        date = get_date(string, self._date['fmt'])
+                    except ValueError:
+                        continue
+
+                    if date < self._last_date:
+                        break
+
+                    self._extract_releases(parent)
+
+    def _extract_releases(self, element):
+        if self._rel:
+            self._extract_releases_with_elts(element)
+        else:
+            self._extract_releases_from_links(element)
+
+    def _extract_releases_with_elts(self, element):
+        rel = element.find(*self._rel['number'])
+
+        if not rel:
+            return
+
+        relnum = re.search(self._pattern, rel.text)
+        relhref = element.find(*self._rel['link'])
+
+        if 'a' not in self._rel['link']:
+            relhref = relhref.find('a')
+
+        if relnum:
+            self._releases.update({relnum.group(1): relhref.get('href')})
+
+    def _extract_releases_from_links(self, element):
+        links = element.find_all('a')
+
+        if not links:
+            return
+
+        for link in links:
+            link_match = re.search(self._pattern, link.text)
+
+            if link_match:
+                self._releases.update({link_match.group(1): link.get('href')})
+
+class HtmlFlatPage(HtmlPage):
+
+    def __init__(self, url, pattern=r'(\d+\.\d+\.?\d*)', releases=None, date=False):
+        HtmlPage.__init__(self, url, pattern)
+
+        self._date = date
+        self._rel = releases
+
+        self._get_releases()
+
+    def _explore_next_nodes(self, start_node):
+        next_node = start_node
+
+        while True:
+            next_node = next_node.nextSibling
+
+            if not next_node or getattr(next_node, 'name', None) == self._rel['number'][0]:
+                return None
+
+            if getattr(next_node, 'name', None) == self._date['elt'][0]:
+                datematch = re.search(self._date['pattern'], next_node.text)
+
+                if datematch:
+                    return get_date(datematch.group(1), self._date['fmt'])
 
     def _get_releases(self):
-        h3s = self._soup.find_all('h3', limit=self._limit)
+        nodes = self._soup.find_all(*self._rel['number'])
 
-        for h3 in h3s:
-            date = datetime.datetime.strptime(h3.find('small').text, '%B %d, %Y')
+        for node in nodes:
+            relnum = re.search(self._pattern, node.text)
+            date = self._explore_next_nodes(node)
 
-            if date < self._last_date:
+            if date and date < self._last_date:
                 break
 
-            link = h3.find('a')
-            self._releases.update({link.text: link.get('href')})
-
-
-class Gitlab(HtmlPage):
-
-    def __init__(self, last_date, limit=10):
-        HtmlPage.__init__(self,
-                          'https://about.gitlab.com/blog/categories/releases/',
-                          last_date, limit)
-
-    def _get_releases(self):
-        section = self._soup.find_all('div', 'articles')[0]
-        links = section.find_all('div', 'article', limit=self._limit)
-
-        for rel in links:
-            if self._last_date:
-                rel_date_str = rel.find_all('div', 'date')[0].text.strip()
-                rel_date = datetime.datetime.strptime(rel_date_str, '%b %d, %Y')
-
-                if rel_date < self._last_date:
-                    break
-
-            text = re.findall(r'(\d{2}\.\d(\.\d)?)', rel.h2.text)
-
-            if not text:
-                continue
-
-            version = ''
-            for j, stuff in enumerate(text):
-                if j > 0:
-                    version += ', ' + stuff[0]
-                else:
-                    version += stuff[0]
-
-            self._releases.update({version: rel.a.get('href')})
-
-
-class Bitbucket(HtmlPage):
-
-    def __init__(self, last_date, limit=10):
-        HtmlPage.__init__(self,
-                          'https://confluence.atlassian.com/bitbucketserver/bitbucket-server-release-notes-872139866.html',
-                          last_date, limit)
-
-    def _get_releases(self):
-        h2s = self._soup.find_all('h2', id=re.compile(r'^BitbucketServerreleasenotes'),
-                                  limit=self._limit)
-
-        for h2 in h2s:
-            if self._last_date:
-                rel_date = h2.next_sibling.next_sibling.strong.text
-                rel_date = datetime.datetime.strptime(rel_date, '%d %B %Y')
-
-                if rel_date < self._last_date:
-                    break
-
-            version = re.search(r'(\d\.\d)', h2.text).group(1)
-            link = self._soup.find('a', rel='nofollow',
-                                   text=re.compile(r'^Bitbucket Server ' + version))
-
-            self._releases.update({version: link.get('href')})
-
-
-class GitKraken(HtmlPage):
-
-    def __init__(self, last_date, limit=10):
-        HtmlPage.__init__(self,
-                          'https://support.gitkraken.com/release-notes/current',
-                          last_date, limit)
-
-    def _get_releases(self):
-        h2s = self._soup.find_all('h2', id=re.compile(r'^version-'),
-                                  limit=self._limit)
-
-        for h2 in h2s:
-            if self._last_date:
-                rel_date = h2.next_sibling.next_sibling.text
-                rel_date = rel_date.split('-')[-1].strip()
-                rel_date = re.sub(r'(\d)(th|st|nd)', '\\1', rel_date)
-                rel_date = datetime.datetime.strptime(rel_date, '%A, %B %d, %Y')
-
-                if rel_date < self._last_date:
-                    break
-
-            version = re.search(r'(\d.\d\.\d)', h2.text).group(1)
-
-            self._releases.update({version: 'https://support.gitkraken.com/release-notes/current'})
-
+            if relnum:
+                self._releases.update({relnum.group(1): self._url})
 
 class GithubTags(Releases):
 
-    def __init__(self, user, password, repo, regex, last_date, limit=10):
-        print('Getting releases from Github repo: {}'.format(repo))
-        Releases.__init__(self, last_date, limit)
+    def __init__(self, repo, regex):
+        Releases.__init__(self)
 
-        self._api_user = user
-        self._api_pass = password
+        self._api_user = ARGS.user
+        self._api_pass = ARGS.password
 
         self._api = 'https://api.github.com/repos/' + repo + '/tags'
         self._url = 'https://github.com/' + repo + '/releases/tag/'
-        self._regex = regex
+        self._regex = re.compile(regex)
 
+        print('> Getting releases from Github repo: {}'.format(repo))
         self._get_releases()
 
     def _get_releases(self):
@@ -251,7 +212,6 @@ class GithubTags(Releases):
             print('Error {} while querying Github API'.format(request.status_code))
         else:
             json = request.json()
-            results = dict()
 
             for tag in json:
                 tag_name = re.match(self._regex, tag['name'])
@@ -265,8 +225,7 @@ class GithubTags(Releases):
                     if sha_req.ok:
                         sha = sha_req.json()
                         commit_date = sha['commit']['committer']['date']
-                        commit_date = datetime.datetime.strptime(commit_date[0:10],
-                                                                 '%Y-%m-%d')
+                        commit_date = get_date(commit_date[0:10], '%Y-%m-%d')
 
                         if commit_date < self._last_date:
                             break
@@ -278,27 +237,38 @@ class GithubTags(Releases):
 
                 self._releases.update({version: self._url + tag['name']})
 
+    def markdown(self, title, url='', replace_url=False):
+        return self._fmt_releases(title, url, replace_url)
+
 print('\nGetting releases since {}\n---------------------------------\n'.format(DATE))
 
 RELEASES = {
-    'Git': PublicInbox(re.compile(r'^\[ANNOUNCE\] Git v(.*)$'), DATE),
-    'Git for Windows': GithubTags(GITHUB_API_USER, GITHUB_API_PASS,
-                                  'git-for-windows/git',
-                                  re.compile(r'^v(\d\.\d+\.\d+)\.windows\.(\d)$'),
-                                  DATE),
-    'libgit2': GithubTags(GITHUB_API_USER, GITHUB_API_PASS, 'libgit2/libgit2',
-                          re.compile(r'^v(\d\.\d+\.\d+)$'), DATE),
-    'libgit2sharp': GithubTags(GITHUB_API_USER, GITHUB_API_PASS,
-                               'libgit2/libgit2sharp',
-                               re.compile(r'^v(\d\.\d+\.?\d*)$'), DATE),
-    'Github Enterprise': GithubEnterprise(DATE),
-    'Gitlab': Gitlab(DATE),
-    'Bitbucket': Bitbucket(DATE),
-    'GitKraken': GitKraken(DATE),
-    'Github Desktop': GithubTags(GITHUB_API_USER, GITHUB_API_PASS,
-                                 'desktop/desktop',
-                                 re.compile(r'^release-(\d\.\d\.\d+)$'), DATE),
-    'tig': PublicInbox(re.compile(r'^\[ANNOUNCE\] tig-(.*)$'), DATE)
+    'Git': HtmlNestedPage('https://public-inbox.org/git/?q=d%3A{:%Y%m%d}..+%5BANNOUNCE%5D+Git'.format(DATE),
+                          pattern=r'^\[ANNOUNCE\] Git v(.*)'),
+    'Git for Windows': GithubTags('git-for-windows/git', r'^v(\d\.\d+\.\d+)\.windows\.(\d)$'),
+    'libgit2': GithubTags('libgit2/libgit2', r'^v(\d\.\d+\.\d+)$'),
+    'libgit2sharp': GithubTags('libgit2/libgit2sharp', r'^v(\d\.\d+\.?\d*)$'),
+    'Github Enterprise': HtmlNestedPage('https://enterprise.github.com/releases/',
+                                        parent=['h3'],
+                                        date={'elt': ['small'], 'fmt': '%B %d, %Y'}),
+    'Gitlab': HtmlNestedPage('https://about.gitlab.com/blog/categories/releases/',
+                             parent=['div', 'article'],
+                             releases={'number': ['h2'], 'link': ['a', 'cover']},
+                             date={'elt': ['div', 'date'], 'fmt': '%b %d, %Y'}),
+    'Bitbucket Server': HtmlFlatPage('https://confluence.atlassian.com/bitbucketserver/bitbucket-server-release-notes-872139866.html',
+                                     pattern=r'(\d\.\d+)',
+                                     releases={'number': ['h2']},
+                                     date={'elt': ['p', 'strong'],
+                                           'pattern': '(.*)',
+                                           'fmt': '%d %B %Y'}),
+    'GitKraken': HtmlFlatPage('https://support.gitkraken.com/release-notes/current',
+                              releases={'number': ['h2']},
+                              date={'elt': ['p'],
+                                    'pattern': r' - (.* \d{4})$',
+                                    'fmt': '%A, %B %d, %Y'}),
+    'Github Desktop': GithubTags('desktop/desktop', r'^release-(\d\.\d\.\d+)$'),
+    'tig': HtmlNestedPage('https://public-inbox.org/git/?q=d%3A{:%Y%m%d}..+%5BANNOUNCE%5D tig'.format(DATE),
+                          pattern=r'^\[ANNOUNCE\] tig-(.*)')
 }
 
 RESULT = '# Releases\n\n'
