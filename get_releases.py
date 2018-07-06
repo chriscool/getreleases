@@ -4,7 +4,7 @@
 Get various Git-related releases for Git Rev News.
 
 Currently supports : Git, Git for Windows, libgit2, libgit2sharp, Github
-Enterprise, Gitlab, Bitbucket, GitKraken, Github Desktop, tig
+Enterprise, Gitlab, Bitbucket, GitKraken, Github Desktop, tig, Sourcetree
 """
 
 import argparse
@@ -267,6 +267,11 @@ RELEASES = {
                                     'pattern': r' - (.* \d{4})$',
                                     'fmt': '%A, %B %d, %Y'}),
     'Github Desktop': GithubTags('desktop/desktop', r'^release-(\d\.\d\.\d+)$'),
+    'Sourcetree': HtmlNestedPage('https://www.sourcetreeapp.com/download-archives',
+                                 pattern=r'(\d\.\d\.?\d*\.?\d*)',
+                                 parent=['tr'],
+                                 releases={'number': ['div'], 'link': ['small']},
+                                 date={'elt': ['td'], 'fmt': '%d-%b-%Y'}),
     'tig': HtmlNestedPage('https://public-inbox.org/git/?q=d%3A{:%Y%m%d}..+%5BANNOUNCE%5D tig'.format(DATE),
                           pattern=r'^\[ANNOUNCE\] tig-(.*)')
 }
