@@ -4,7 +4,7 @@
 Get various Git-related releases for Git Rev News.
 
 Currently supports : Git, Git for Windows, libgit2, libgit2sharp, Github
-Enterprise, Gitlab, Bitbucket, GitKraken, Github Desktop, tig, Sourcetree
+Enterprise, GitLab, Bitbucket, GitKraken, Github Desktop, tig, Sourcetree
 """
 
 import argparse
@@ -251,7 +251,7 @@ RELEASES = {
     'Github Enterprise': HtmlNestedPage('https://enterprise.github.com/releases/',
                                         parent=['h3'],
                                         date={'elt': ['small'], 'fmt': '%B %d, %Y'}),
-    'Gitlab': HtmlNestedPage('https://about.gitlab.com/blog/categories/releases/',
+    'GitLab': HtmlNestedPage('https://about.gitlab.com/blog/categories/releases/',
                              parent=['div', 'article'],
                              releases={'number': ['h2'], 'link': ['a', 'cover']},
                              date={'elt': ['div', 'date'], 'fmt': '%b %d, %Y'}),
