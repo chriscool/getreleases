@@ -22,6 +22,9 @@ PARSER.add_argument('-p', '--password', help='GitHub API password (required for 
 
 ARGS = PARSER.parse_args()
 
+print('Using user "{}"'.format(ARGS.user))
+print('Using password "{}"'.format(ARGS.password))
+
 if ARGS.since:
     DATE = datetime.datetime.strptime(ARGS.since, '%Y-%m-%d').date()
 else:
