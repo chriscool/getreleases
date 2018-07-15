@@ -3,8 +3,8 @@
 """
 Get various Git-related releases for Git Rev News.
 
-Currently supports : Git, Git for Windows, libgit2, libgit2sharp, Github
-Enterprise, GitLab, Bitbucket, GitKraken, Github Desktop, tig, Sourcetree
+Currently supports : Git, Git for Windows, libgit2, libgit2sharp, GitHub
+Enterprise, GitLab, Bitbucket, GitKraken, GitHub Desktop, tig, Sourcetree
 """
 
 import argparse
@@ -17,8 +17,8 @@ from bs4 import BeautifulSoup
 
 PARSER = argparse.ArgumentParser()
 PARSER.add_argument('-s', '--since', help='Get releases since that date. Format: YYYY-MM-DD. Default is 30 days before today.')
-PARSER.add_argument('-u', '--user', help='Github API user (required for Github repos).')
-PARSER.add_argument('-p', '--password', help='Github API password (required for Github repos).')
+PARSER.add_argument('-u', '--user', help='GitHub API user (required for GitHub repos).')
+PARSER.add_argument('-p', '--password', help='GitHub API password (required for GitHub repos).')
 
 ARGS = PARSER.parse_args()
 
@@ -190,7 +190,7 @@ class HtmlFlatPage(HtmlPage):
             if relnum:
                 self._releases.update({relnum.group(1): self._url})
 
-class GithubTags(Releases):
+class GitHubTags(Releases):
 
     def __init__(self, repo, regex):
         Releases.__init__(self)
@@ -202,14 +202,14 @@ class GithubTags(Releases):
         self._url = 'https://github.com/' + repo + '/releases/tag/'
         self._regex = re.compile(regex)
 
-        print('> Getting releases from Github repo: {}'.format(repo))
+        print('> Getting releases from GitHub repo: {}'.format(repo))
         self._get_releases()
 
     def _get_releases(self):
         request = requests.get(self._api, auth=(self._api_user, self._api_pass))
 
         if not request.ok:
-            print('Error {} while querying Github API'.format(request.status_code))
+            print('Error {} while querying GitHub API'.format(request.status_code))
         else:
             json = request.json()
 
@@ -245,10 +245,10 @@ print('\nGetting releases since {}\n---------------------------------\n'.format(
 RELEASES = {
     'Git': HtmlNestedPage('https://public-inbox.org/git/?q=d%3A{:%Y%m%d}..+%5BANNOUNCE%5D+Git'.format(DATE),
                           pattern=r'^\[ANNOUNCE\] Git v(.*)'),
-    'Git for Windows': GithubTags('git-for-windows/git', r'^v(\d\.\d+\.\d+)\.windows\.(\d)$'),
-    'libgit2': GithubTags('libgit2/libgit2', r'^v(\d\.\d+\.\d+)$'),
-    'libgit2sharp': GithubTags('libgit2/libgit2sharp', r'^v(\d\.\d+\.?\d*)$'),
-    'Github Enterprise': HtmlNestedPage('https://enterprise.github.com/releases/',
+    'Git for Windows': GitHubTags('git-for-windows/git', r'^v(\d\.\d+\.\d+)\.windows\.(\d)$'),
+    'libgit2': GitHubTags('libgit2/libgit2', r'^v(\d\.\d+\.\d+)$'),
+    'libgit2sharp': GitHubTags('libgit2/libgit2sharp', r'^v(\d\.\d+\.?\d*)$'),
+    'GitHub Enterprise': HtmlNestedPage('https://enterprise.github.com/releases/',
                                         parent=['h3'],
                                         date={'elt': ['small'], 'fmt': '%B %d, %Y'}),
     'GitLab': HtmlNestedPage('https://about.gitlab.com/blog/categories/releases/',
@@ -266,7 +266,7 @@ RELEASES = {
                               date={'elt': ['p'],
                                     'pattern': r' - (.* \d{4})$',
                                     'fmt': '%A, %B %d, %Y'}),
-    'Github Desktop': GithubTags('desktop/desktop', r'^release-(\d\.\d\.\d+)$'),
+    'GitHub Desktop': GitHubTags('desktop/desktop', r'^release-(\d\.\d\.\d+)$'),
     'Sourcetree': HtmlNestedPage('https://www.sourcetreeapp.com/download-archives',
                                  pattern=r'(\d\.\d\.?\d*\.?\d*)',
                                  parent=['tr'],
@@ -281,7 +281,7 @@ RESULT = '# Releases\n\n'
 print('Formatting releases...')
 
 for name, releases in RELEASES.items():
-    if name == 'Github Desktop':
+    if name == 'GitHub Desktop':
         RESULT += releases.markdown(name,
                                     url='https://desktop.github.com/release-notes/',
                                     replace_url=True)
