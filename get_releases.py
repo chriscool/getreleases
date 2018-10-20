@@ -46,7 +46,7 @@ class Releases():
 
         for i, (version, href) in enumerate(self._releases.items()):
             if i > 0:
-                result += ', '
+                result += ',\n'
 
             href = url if replace_url else urljoin(url, href)
             result += fmt.format(version, href)
