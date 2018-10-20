@@ -42,7 +42,7 @@ class Releases():
             return ''
 
         result = '+ {} '.format(title)
-        fmt = '[v{}]({})'
+        fmt = '[{}]({})'
 
         for i, (version, href) in enumerate(self._releases.items()):
             if i > 0:
