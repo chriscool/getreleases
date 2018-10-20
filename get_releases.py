@@ -5,6 +5,22 @@ Get various Git-related releases for Git Rev News.
 
 Currently supports : Git, Git for Windows, libgit2, libgit2sharp, GitHub
 Enterprise, GitLab, Bitbucket, GitKraken, GitHub Desktop, tig, Sourcetree
+
+This should be used like this:
+
+  ./get_releases.py --user XXXXXXXX --password YYYYYYYY
+
+where XXXXXXXX is the GitHub username and YYYYYYYY is a personal
+access token created from:
+
+  https://github.com/settings/tokens
+
+The token needs only the repo/public_repo (Access public repositories)
+scope.
+
+For more information, see:
+
+  https://developer.github.com/changes/2013-09-03-two-factor-authentication/
 """
 
 import argparse
