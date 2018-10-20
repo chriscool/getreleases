@@ -253,7 +253,7 @@ RELEASES = {
                                         date={'elt': ['small'], 'fmt': '%B %d, %Y'}),
     'GitLab': HtmlNestedPage('https://about.gitlab.com/blog/categories/releases/',
                              parent=['div', 'article'],
-                             releases={'number': ['h2'], 'link': ['a', 'cover']},
+                             releases={'number': ['h3'], 'link': ['a', 'cover']},
                              date={'elt': ['div', 'date'], 'fmt': '%b %d, %Y'}),
     'Bitbucket Server': HtmlFlatPage('https://confluence.atlassian.com/bitbucketserver/bitbucket-server-release-notes-872139866.html',
                                      pattern=r'(\d\.\d+)',
