@@ -76,7 +76,7 @@ class HtmlPage(Releases):
 
         self._url = url
         self._soup = self._get_soup()
-        self._pattern = re.compile(pattern)
+        self._pattern = re.compile(pattern, re.IGNORECASE)
 
     def _get_soup(self):
         print('> Requesting {}'.format(self._url))
@@ -260,7 +260,7 @@ print('\nGetting releases since {}\n---------------------------------\n'.format(
 
 RELEASES = {
     'Git': HtmlNestedPage('https://public-inbox.org/git/?q=d%3A{:%Y%m%d}..+%5BANNOUNCE%5D+Git'.format(DATE),
-                          pattern=r'^\[ANNOUNCE\] Git v(.*)'),
+                          pattern=r'^\[ANNOUNCE\] Git v?(\d\.\d+.*)'),
     'Git for Windows': GitHubTags('git-for-windows/git', r'^v(\d\.\d+\.\d+)\.windows\.(\d)$'),
     'libgit2': GitHubTags('libgit2/libgit2', r'^v(\d\.\d+\.\d+)$'),
     'libgit2sharp': GitHubTags('libgit2/libgit2sharp', r'^v(\d\.\d+\.?\d*)$'),
