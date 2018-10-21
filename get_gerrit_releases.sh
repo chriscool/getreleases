@@ -32,7 +32,9 @@ perl -ne '@a = m/<Key>gerrit-((\d+)\.(\d+)(\.\d+)?)\.war<\/Key><Generation>\d+<\
          #print "h: $h, u: $u, v: $v, w: $w, t: $t\n";
          my $l = "";
          $l = "#$u$v$w" if ($w > 0);
-         print "[$h](https://www.gerritcodereview.com/$u.$v.html$l)\n";
+         my $c = "";
+         $c = "," if ($count > 1);
+         print "[$h](https://www.gerritcodereview.com/$u.$v.html$l)$c\n";
          $count--;
          last unless ($count > 0);
      }' "$releases"
