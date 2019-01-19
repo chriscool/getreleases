@@ -20,7 +20,7 @@ then
 fi
 
 perl -ne '@a = m/<Key>gerrit-((\d+)\.(\d+)(\.\d+)?)\.war<\/Key><Generation>\d+<\/Generation><MetaGeneration>\d+<\/MetaGeneration><LastModified>([^<]*)<\/LastModified>/gsm;
-     print "Gerrit ";
+     print "+ Gerrit Code Review ";
      my %times;
      while (my ($h, $u, $v, $w, $t) = splice (@a, 0, 5)) {
          $w = substr $w, 1;
