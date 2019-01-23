@@ -27,6 +27,9 @@ git show "$known_good_commit" >/dev/null 2>&1 ||
 	die "$known_good_commit not found" \
 	    "we need to be in a repo cloned from $repo_url"
 
+cur_branch=$(git rev-parse --abbrev-ref HEAD)
+test "$cur_branch" = "master" || die "please switch to the 'master' branch"
+
 test -d "$src_dir" || die "no source '$src_dir' directory"
 
 test -d "$dst_dir" || die "no destination '$dst_dir' directory"
@@ -54,11 +57,6 @@ today=$(date "+%Y-%m-%d")
 next_month=$(LANG=C date "+%B %Y")
 prev_month=$(LANG=C date --date="$today - 1 month" "+%B %Y")
 
-
-# If needed make sure we are up-to-date
-
-git checkout master
-git pull horigin master
 
 # Publish current draft
 
