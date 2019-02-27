@@ -57,7 +57,6 @@ today=$(date "+%Y-%m-%d")
 next_month=$(LANG=C date "+%B %Y")
 prev_month=$(LANG=C date --date="$today - 1 month" "+%B %Y")
 
-
 # Publish current draft
 
 git mv "$src_dir"/edition-$cur.md "$dst_dir"/$today-edition-$cur.markdown
@@ -68,7 +67,13 @@ git commit -m "Publish rn-$cur in $dst_dir/"
 
 git cherry-pick "$last_draft_commit"
 
-git mv "$src_dir"/edition-$cur.md "$src_dir"/edition-$next.md
+cur_ed="$src_dir/edition-$cur.md"
+next_ed="$src_dir/edition-$next.md"
+
+test -f "$cur_ed" || die "cannot find '$cur_ed'"
+
+git mv "$cur_ed" "$next_ed" ||
+	die "failed to 'git mv $cur_ed $next_ed'"
 
 add_order_suffix() {
 perl -e '
@@ -95,7 +100,7 @@ perl -pi -e "
 	s/$today/$nextdate/g;
 	s/$prev_month/$next_month/g;
 
-" "$src_dir"/edition-$next.md
+" "$next_ed"
 
-git commit --amend -m "Add draft for rn-$next" "$src_dir"/edition-$cur.md "$src_dir"/edition-$next.md
+git commit --amend -m "Add draft for rn-$next" "$cur_ed" "$next_ed"
 
