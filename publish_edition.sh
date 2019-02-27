@@ -1,12 +1,25 @@
 #!/bin/sh
+#
+# This script should be used from the root directory of the
+# git.github.io repository. It will publish an edition using an
+# existing draft (this will create a commit) and create a new empty
+# draft for the following edition (this will create another commit).
+#
+# Before running this script you have to decide the next publication
+# date (set 'nextdate' below) and find the commit that added the
+# previous draft (set 'last_draft_commit' below). After that you can
+# run the script using for example:
+#
+# ../getreleases/publish_edition.sh
+#
 
 # TODO: Automate finding next publication date
-nextdate="2019-02-20"
+nextdate="2019-03-20"
 
 # TODO: Find the commit below using something like:
 # TODO: git log -1 --grep "Add draft for rn" --oneline
 # TODO: or better use a template
-last_draft_commit=52c3265bc4485bc3db8262fd4a9907a99849e046
+last_draft_commit=c15709332e11f63b30d59b2b392929aaca648b53
 
 
 repo_url="https://github.com/git/git.github.io.git"
