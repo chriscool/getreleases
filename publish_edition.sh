@@ -70,16 +70,32 @@ git cherry-pick "$last_draft_commit"
 
 git mv "$src_dir"/edition-$cur.md "$src_dir"/edition-$next.md
 
-# TODO: Use only one Perl invocation
+add_order_suffix() {
+perl -e '
+	my $nb = $ARGV[0];
+	if ($nb =~ m/[02-9]1$/) {
+		print $nb . "st\n";
+	} elsif ($nb =~ m/[02-9]2$/) {
+		print $nb . "nd\n";
+	} elsif ($nb =~ m/[02-9]3$/) {
+		print $nb . "rd\n";
+	} else {
+		print $nb . "th\n";
+	}
+' "$1"
+}
 
-perl -pi -e "s/Edition $cur/Edition $next/g" "$src_dir"/edition-$next.md
+cur_ord=$(add_order_suffix "$cur")
+next_ord=$(add_order_suffix "$next")
 
-# TODO: fix "th" when $cur or $next end with 1, 2 or 3
-perl -pi -e "s/${cur}th edition/${next}th edition/g" "$src_dir"/edition-$next.md
+perl -pi -e "
 
-perl -pi -e "s/$today/$nextdate/g" "$src_dir"/edition-$next.md
+	s/Edition $cur/Edition $next/g;
+	s/${cur_ord} edition/${next_ord} edition/g;
+	s/$today/$nextdate/g;
+	s/$prev_month/$next_month/g;
 
-perl -pi -e "s/$prev_month/$next_month/g" "$src_dir"/edition-$next.md
+" "$src_dir"/edition-$next.md
 
 git commit --amend -m "Add draft for rn-$next" "$src_dir"/edition-$cur.md "$src_dir"/edition-$next.md
 
