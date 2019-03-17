@@ -5,16 +5,46 @@
 # existing draft (this will create a commit) and create a new empty
 # draft for the following edition (this will create another commit).
 #
-# Before running this script you have to decide the next publication
-# date (set 'nextdate' below) and find the commit that added the
-# previous draft (set 'last_draft_commit' below). After that you can
-# run the script using for example:
+# This script can be run like this:
 #
-# ../getreleases/publish_edition.sh
+# $ ../getreleases/publish_edition.sh [<next date>]
+#
+# where <next date> is the publication date for the following edition.
+#
+# The publication date for the current edition made from the current
+# draft is today.
+#
+# If <next date> is not provided to the script, it will compute it by
+# adding one month to today's date and then finding the following
+# wednesday.
 #
 
-# TODO: Automate finding next publication date
-nextdate="2019-03-20"
+arg="$1"
+
+die() {
+    printf >&2 "FATAL: %s\n" "$@"
+    exit 1
+}
+
+test "$#" -le 1 ||
+	die "too many arguments" "Usage: $0 [<next date>]"
+
+today=$(date "+%F")
+
+if test -n "$arg"
+then
+	nextdate=$(date "+%F" --date="$arg") ||
+		die "failed to understand '$arg' as a date"
+else
+	nextdate=$(date "+%F" --date="$today + 1 month")
+	day_of_week=$(date "+%u" --date="$nextdate")
+	test "$day_of_week" -lt 3 &&
+		nextdate=$(date "+%F" --date="$nextdate + $(( 3 - $day_of_week )) days")
+	test "$day_of_week" -gt 3 &&
+		nextdate=$(date "+%F" --date="$nextdate + $(( 10 - $day_of_week )) days")
+fi
+
+echo "Next publication date is: $(LANG=C date "+%A %B %d, %Y" --date="$nextdate")"
 
 basedir=$(dirname "$0")
 
@@ -22,11 +52,6 @@ repo_url="https://github.com/git/git.github.io.git"
 known_good_commit="5bc243932ea7938830757e8370df6bd86df39cab"
 src_dir="rev_news/drafts"
 dst_dir="_posts"
-
-die() {
-    printf >&2 "FATAL: %s\n" "$@"
-    exit 1
-}
 
 # Basic checks
 
@@ -59,8 +84,6 @@ cur=$(expr "$edition" : "rev_news/drafts/edition-\([0-9]\+\).md")
 test -n "$cur" || die "'$edition' should contain a number"
 
 next=$(expr "$cur" + 1)
-
-today=$(date "+%Y-%m-%d")
 
 add_order_suffix() {
 perl -e '
