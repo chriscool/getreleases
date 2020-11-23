@@ -3,6 +3,8 @@
 """
 Get various Git-related releases for Git Rev News.
 
+This works by parsing a release page or a tag page for each supported software.
+
 Currently supports : Git, Git for Windows, libgit2, libgit2sharp, GitHub
 Enterprise, GitLab, Bitbucket, GitKraken, GitHub Desktop, tig, Sourcetree
 
