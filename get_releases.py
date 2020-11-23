@@ -3,12 +3,25 @@
 """
 Get various Git-related releases for Git Rev News.
 
-This works by parsing a release page or a tag page for each supported software.
+This works by parsing a release page or a tag page for each
+supported software.
 
-Currently supports : Git, Git for Windows, libgit2, libgit2sharp, GitHub
-Enterprise, GitLab, Bitbucket, GitKraken, GitHub Desktop, tig, Sourcetree
+Currently supports : Git, Git for Windows, libgit2, libgit2sharp,
+GitHub Enterprise, GitLab, Bitbucket, GitKraken, GitHub Desktop,
+tig, Sourcetree.
 
-This should be used like this:
+To get help about all the supported options, this should be used
+like this:
+
+  ./get_releases.py --help
+
+To list all supported software and what URL is used, this should
+be used like this:
+
+  ./get_releases.py --list
+
+To actually generate release information, this should be used
+like this:
 
   ./get_releases.py --user XXXXXXXX --password YYYYYYYY
 
