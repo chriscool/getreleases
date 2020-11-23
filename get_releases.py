@@ -75,10 +75,13 @@ class HtmlPage(Releases):
 
     def __init__(self, url, pattern=r'(\d+\.\d+\.?\d*)'):
         Releases.__init__(self)
+        self._pattern = pattern
 
         self._url = url
+
+    def get_releases(self):
         self._soup = self._get_soup()
-        self._pattern = re.compile(pattern, re.IGNORECASE)
+        self._pattern = re.compile(self._pattern, re.IGNORECASE)
 
     def _get_soup(self):
         print('> Requesting {}'.format(self._url))
@@ -106,9 +109,9 @@ class HtmlNestedPage(HtmlPage):
         self._date = date
         self._rel = releases
 
-        self._get_releases()
+    def get_releases(self):
+        HtmlPage.get_releases(self)
 
-    def _get_releases(self):
         if not self._soup:
             return
 
@@ -178,8 +181,6 @@ class HtmlFlatPage(HtmlPage):
         self._date = date
         self._rel = releases
 
-        self._get_releases()
-
     def _explore_next_nodes(self, start_node):
         next_node = start_node
 
@@ -195,7 +196,9 @@ class HtmlFlatPage(HtmlPage):
                 if datematch:
                     return get_date(datematch.group(1), self._date['fmt'])
 
-    def _get_releases(self):
+    def get_releases(self):
+        HtmlPage.get_releases(self)
+
         nodes = self._soup.find_all(*self._rel['number'])
 
         for node in nodes:
@@ -218,12 +221,11 @@ class GitHubTags(Releases):
 
         self._api = 'https://api.github.com/repos/' + repo + '/tags'
         self._url = 'https://github.com/' + repo + '/releases/tag/'
+        self._repo = repo
         self._regex = re.compile(regex)
 
-        print('> Getting releases from GitHub repo: {}'.format(repo))
-        self._get_releases()
-
-    def _get_releases(self):
+    def get_releases(self):
+        print('> Getting releases from GitHub repo: {}'.format(self._repo))
         request = requests.get(self._api, auth=(self._api_user, self._api_pass))
 
         if not request.ok:
@@ -257,8 +259,6 @@ class GitHubTags(Releases):
 
     def markdown(self, title, url='', replace_url=False):
         return self._fmt_releases(title, url, replace_url)
-
-print('\nGetting releases since {}\n---------------------------------\n'.format(DATE))
 
 RELEASES = {
     'Git': HtmlNestedPage('https://public-inbox.org/git/?q=d%3A{:%Y%m%d}..+%5BANNOUNCE%5D+Git'.format(DATE),
@@ -294,11 +294,13 @@ RELEASES = {
                           pattern=r'^\[ANNOUNCE\] tig-(.*)')
 }
 
+
+print('\nGetting releases since {}\n---------------------------------\n'.format(DATE))
+
 RESULT = '# Releases\n\n'
 
-print('Formatting releases...')
-
 for name, releases in RELEASES.items():
+    releases.get_releases()
     if name == 'GitHub Desktop':
         RESULT += releases.markdown(name,
                                     url='https://desktop.github.com/release-notes/',
