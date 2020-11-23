@@ -37,6 +37,7 @@ PARSER = argparse.ArgumentParser()
 PARSER.add_argument('-s', '--since', help='Get releases since that date. Format: YYYY-MM-DD. Default is 30 days before today.')
 PARSER.add_argument('-u', '--user', help='GitHub API user (required for GitHub repos).')
 PARSER.add_argument('-p', '--password', help='GitHub API password (required for GitHub repos).')
+PARSER.add_argument('-l', '--list', help='List supported software and their URL.', action="store_true")
 
 ARGS = PARSER.parse_args()
 
@@ -294,6 +295,11 @@ RELEASES = {
                           pattern=r'^\[ANNOUNCE\] tig-(.*)')
 }
 
+if ARGS.list:
+    print("Supported software:")
+    for name, releases in RELEASES.items():
+        print('\t{} <-- {}'.format(name, releases._url))
+    exit(0)
 
 print('\nGetting releases since {}\n---------------------------------\n'.format(DATE))
 
