@@ -51,6 +51,7 @@ PARSER.add_argument('-s', '--since', help='Get releases since that date. Format:
 PARSER.add_argument('-u', '--user', help='GitHub API user (required for GitHub repos).')
 PARSER.add_argument('-p', '--password', help='GitHub API password (required for GitHub repos).')
 PARSER.add_argument('-l', '--list', help='List supported software and their URL.', action="store_true")
+PARSER.add_argument('-g', '--get', help='Get releases only for this software.')
 
 ARGS = PARSER.parse_args()
 
@@ -308,10 +309,27 @@ RELEASES = {
                           pattern=r'^\[ANNOUNCE\] tig-(.*)')
 }
 
+def get_result(name, releases):
+    if name == 'GitHub Desktop':
+        return releases.markdown(name,
+                                 url='https://desktop.github.com/release-notes/',
+                                 replace_url=True)
+    else:
+        return releases.markdown(name)
+
 if ARGS.list:
     print("Supported software:")
     for name, releases in RELEASES.items():
         print('\t{} <-- {}'.format(name, releases._url))
+    exit(0)
+
+if ARGS.get:
+    print('Getting releases only for {} since {}\n'.format(ARGS.get, DATE))
+    pattern = re.compile(ARGS.get, re.IGNORECASE)
+    for name, releases in RELEASES.items():
+        if pattern.match(name):
+            releases.get_releases()
+            print(get_result(name, releases))
     exit(0)
 
 print('\nGetting releases since {}\n---------------------------------\n'.format(DATE))
@@ -320,12 +338,7 @@ RESULT = '# Releases\n\n'
 
 for name, releases in RELEASES.items():
     releases.get_releases()
-    if name == 'GitHub Desktop':
-        RESULT += releases.markdown(name,
-                                    url='https://desktop.github.com/release-notes/',
-                                    replace_url=True)
-    else:
-        RESULT += releases.markdown(name)
+    RESULT += get_result(name, releases)
 
 print('Writing to releases.md...')
 
