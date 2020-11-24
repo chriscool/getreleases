@@ -52,6 +52,7 @@ PARSER.add_argument('-u', '--user', help='GitHub API user (required for GitHub r
 PARSER.add_argument('-p', '--password', help='GitHub API password (required for GitHub repos).')
 PARSER.add_argument('-l', '--list', help='List supported software and their URL.', action="store_true")
 PARSER.add_argument('-g', '--get', help='Get releases only for this software.')
+PARSER.add_argument('-d', '--debug', help='Show debugging information.', action="store_true")
 
 ARGS = PARSER.parse_args()
 
@@ -68,6 +69,7 @@ class Releases():
 
     def __init__(self):
         self._last_date = DATE
+        self._debug = ARGS.debug
         self._releases = dict()
 
     def _fmt_releases(self, title, url='', replace_url=False):
@@ -85,6 +87,12 @@ class Releases():
             result += fmt.format(version, href)
 
         return result + '\n'
+
+    def _print_debug(self, string):
+        if self._debug:
+            print('--->')
+            print(string)
+            print('<---')
 
 class HtmlPage(Releases):
 
