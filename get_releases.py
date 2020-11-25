@@ -143,38 +143,56 @@ class HtmlNestedPage(HtmlPage):
                 dates = parent.find_all(*self._date['elt'])
 
                 for date in dates:
-                    string = date.text.strip()
+                    if 'link' in self._date:
+                        string = date.get('href')
+                    else:
+                        string = date.text.strip()
 
-                    try:
-                        date = get_date(string, self._date['fmt'])
-                    except ValueError:
+                    date = self._extract_date_from_string(string)
+
+                    if not date or date < self._last_date:
                         continue
 
-                    if date < self._last_date:
-                        break
+                    if 'link' in self._date:
+                        self._extract_releases(parent, string)
+                    else:
+                        self._extract_releases(parent)
 
-                    self._extract_releases(parent)
+    def _extract_date_from_string(self, string):
+        if 'pattern' in self._date:
+            match = re.search(self._date['pattern'], string)
+            string = match.group(1)
 
-    def _extract_releases(self, element):
+        try:
+            date = get_date(string, self._date['fmt'])
+        except ValueError:
+            date = None
+
+        return date
+
+    def _extract_releases(self, element, href=None):
         if self._rel:
-            self._extract_releases_with_elts(element)
+            self._extract_releases_with_elts(element, href)
         else:
             self._extract_releases_from_links(element)
 
-    def _extract_releases_with_elts(self, element):
+    def _extract_releases_with_elts(self, element, href):
         rel = element.find(*self._rel['number'])
 
         if not rel:
             return
 
         relnum = re.search(self._pattern, rel.text)
-        relhref = element.find(*self._rel['link'])
+        relnum = relnum.group(1)
 
-        if 'a' not in self._rel['link']:
-            relhref = relhref.find('a')
+        if 'link' in self._rel:
+            relhref = element.find(*self._rel['link'])
+            if 'a' not in self._rel['link']:
+                relhref = relhref.find('a')
+            href = relhref.get('href')
 
         if relnum:
-            self._releases.update({relnum.group(1): relhref.get('href')})
+            self._releases.update({relnum: href})
 
     def _extract_releases_from_links(self, element):
         links = element.find_all('a')
@@ -285,9 +303,12 @@ RELEASES = {
                                         parent=['h3'],
                                         date={'elt': ['small'], 'fmt': '%B %d, %Y'}),
     'GitLab': HtmlNestedPage('https://about.gitlab.com/blog/categories/releases/',
-                             parent=['div', 'article'],
-                             releases={'number': ['h3'], 'link': ['a', 'cover']},
-                             date={'elt': ['div', 'date'], 'fmt': '%b %d, %Y'}),
+                             parent=['div', 'blog-card-content'],
+                             releases={'number': ['h3']},
+                             date={'elt': ['a', 'blog-card-title'],
+                                   'link': True,
+                                   'pattern': '/(\d+/\d+/\d+)/',
+                                   'fmt': '%Y/%m/%d'}),
     'Bitbucket Server': HtmlFlatPage('https://confluence.atlassian.com/bitbucketserver/bitbucket-server-release-notes-872139866.html',
                                      pattern=r'(\d\.\d+)',
                                      releases={'number': ['h2']},
