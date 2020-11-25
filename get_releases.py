@@ -145,10 +145,15 @@ class HtmlNestedPage(HtmlPage):
 
     def _get_releases_in_parent(self):
         parents = self._soup.find_all(*self._parent)
+        self._print_debug('Getting releases from parents:')
+        self._print_debug(parents)
 
         for parent in parents:
+            self._print_debug('Getting releases from parent: {}'.format(parent))
             if self._date:
                 dates = parent.find_all(*self._date['elt'])
+                self._print_debug('Getting releases from dates ({}):'.format(*self._date['elt']))
+                self._print_debug(dates)
 
                 for date in dates:
                     if 'link' in self._date:
@@ -167,12 +172,17 @@ class HtmlNestedPage(HtmlPage):
                         self._extract_releases(parent)
 
     def _extract_date_from_string(self, string):
+        self._print_debug('Date in string: {}'.format(string))
+
         if 'pattern' in self._date:
+            self._print_debug('Searching pattern: {}'.format(self._date['pattern']))
             match = re.search(self._date['pattern'], string)
             string = match.group(1)
+            self._print_debug('String after pattern: {}'.format(string))
 
         try:
             date = get_date(string, self._date['fmt'])
+            self._print_debug('Date found: {}'.format(date))
         except ValueError:
             date = None
 
@@ -186,12 +196,16 @@ class HtmlNestedPage(HtmlPage):
 
     def _extract_releases_with_elts(self, element, href):
         rel = element.find(*self._rel['number'])
+        self._print_debug('Getting releases from elements ({}) ({}):'.format(element, *self._rel['number']))
+        self._print_debug(rel)
 
         if not rel:
             return
 
+        self._print_debug('Getting relnum from ({}) ({}):'.format(self._pattern, rel.text))
         relnum = re.search(self._pattern, rel.text)
         relnum = relnum.group(1)
+        self._print_debug(relnum)
 
         if 'link' in self._rel:
             relhref = element.find(*self._rel['link'])
@@ -204,6 +218,8 @@ class HtmlNestedPage(HtmlPage):
 
     def _extract_releases_from_links(self, element):
         links = element.find_all('a')
+        self._print_debug('Getting releases from links:')
+        self._print_debug(links)
 
         if not links:
             return
