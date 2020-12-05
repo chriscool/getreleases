@@ -296,6 +296,7 @@ class GitHubTags(Releases):
                     continue
 
                 if self._last_date:
+                    self._print_debug('Getting commit url: {}'.format(tag['commit']['url']))
                     sha_req = requests.get(tag['commit']['url'],
                                            auth=(self._api_user, self._api_pass))
 
