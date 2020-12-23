@@ -291,7 +291,9 @@ class GitHubTags(Releases):
             json = request.json()
 
             for tag in json:
+                self._print_debug('tag: {}'.format(tag['name']))
                 tag_name = re.match(self._regex, tag['name'])
+                self._print_debug('tag_name: {}'.format(tag_name))
                 if not tag_name:
                     continue
 
@@ -321,7 +323,7 @@ class GitHubTags(Releases):
 RELEASES = {
     'Git': HtmlNestedPage('https://public-inbox.org/git/?q=d%3A{:%Y%m%d}..+%5BANNOUNCE%5D+Git'.format(DATE),
                           pattern=r'^\[ANNOUNCE\] Git v?(\d\.\d+.*)'),
-    'Git for Windows': GitHubTags('git-for-windows/git', r'^v(\d\.\d+\.\d+)\.windows\.(\d)$'),
+    'Git for Windows': GitHubTags('git-for-windows/git', r'^v(\d\.\d+\.\d+.*)\.windows\.(\d)$'),
     'libgit2': GitHubTags('libgit2/libgit2', r'^v(\d\.\d+\.\d+)$'),
     'libgit2sharp': GitHubTags('libgit2/libgit2sharp', r'^v(\d\.\d+\.?\d*)$'),
     'GitHub Enterprise': HtmlNestedPage('https://enterprise.github.com/releases/',
