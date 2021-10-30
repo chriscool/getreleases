@@ -369,12 +369,6 @@ RELEASES = {
                           pattern=r'^\[ANNOUNCE\] tig-(.*)')
 }
 
-def get_result(name, releases):
-    if name == 'GitHub Desktop':
-        return releases.markdown(name)
-    else:
-        return releases.markdown(name)
-
 if ARGS.list:
     print("Supported software:")
     for name, releases in RELEASES.items():
@@ -387,7 +381,7 @@ if ARGS.get:
     for name, releases in RELEASES.items():
         if pattern.match(name):
             releases.get_releases()
-            print(get_result(name, releases))
+            print(releases.markdown(name))
     exit(0)
 
 print('\nGetting releases since {}\n---------------------------------\n'.format(DATE))
@@ -396,7 +390,7 @@ RESULT = '# Releases\n\n'
 
 for name, releases in RELEASES.items():
     releases.get_releases()
-    RESULT += get_result(name, releases)
+    RESULT += releases.markdown(name)
 
 print('Writing to releases.md...')
 
