@@ -73,7 +73,7 @@ class Releases():
         self._releases = dict()
         self._replace_url = False
 
-    def _fmt_releases(self, title, url=''):
+    def _fmt_releases(self, title, url):
         if not self._releases:
             return ''
 
