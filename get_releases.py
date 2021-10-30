@@ -276,14 +276,14 @@ class GitHubTags(Releases):
         self._api_user = ARGS.user
         self._api_pass = ARGS.password
 
-        self._api = 'https://api.github.com/repos/' + repo + '/tags'
+        self._api_url = 'https://api.github.com/repos/' + repo + '/tags'
         self._url = 'https://github.com/' + repo + '/releases/tag/'
         self._repo = repo
         self._regex = re.compile(regex)
 
     def get_releases(self):
         print('> Getting releases from GitHub repo: {}'.format(self._repo))
-        request = requests.get(self._api, auth=(self._api_user, self._api_pass))
+        request = requests.get(self._api_url, auth=(self._api_user, self._api_pass))
 
         if not request.ok:
             print('Error {} while querying GitHub API'.format(request.status_code))
