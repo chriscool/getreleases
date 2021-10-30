@@ -71,8 +71,9 @@ class Releases():
         self._last_date = DATE
         self._debug = ARGS.debug
         self._releases = dict()
+        self._replace_url = False
 
-    def _fmt_releases(self, title, url='', replace_url=False):
+    def _fmt_releases(self, title, url=''):
         if not self._releases:
             return ''
 
@@ -83,7 +84,7 @@ class Releases():
             if i > 0:
                 result += ',\n'
 
-            href = url if replace_url else urljoin(url, href)
+            href = url if self._replace_url else urljoin(url, href)
             result += fmt.format(version, href)
 
         return result + '\n'
@@ -317,8 +318,8 @@ class GitHubTags(Releases):
 
                 self._releases.update({version: self._tag_url + tag['name']})
 
-    def markdown(self, title, url='', replace_url=False):
-        return self._fmt_releases(title, url, replace_url)
+    def markdown(self, title, url=''):
+        return self._fmt_releases(title, url)
 
 RELEASES = {
     'Git': HtmlNestedPage('https://public-inbox.org/git/?q=d%3A{:%Y%m%d}..+%5BANNOUNCE%5D+Git'.format(DATE),
@@ -366,9 +367,9 @@ RELEASES = {
 
 def get_result(name, releases):
     if name == 'GitHub Desktop':
+        releases._replace_url = True
         return releases.markdown(name,
-                                 url='https://desktop.github.com/release-notes/',
-                                 replace_url=True)
+                                 url='https://desktop.github.com/release-notes/')
     else:
         return releases.markdown(name)
 
