@@ -277,7 +277,7 @@ class GitHubTags(Releases):
         self._api_pass = ARGS.password
 
         self._api_url = 'https://api.github.com/repos/' + repo + '/tags'
-        self._url = 'https://github.com/' + repo + '/releases/tag/'
+        self._tag_url = 'https://github.com/' + repo + '/releases/tag/'
         self._repo = repo
         self._regex = re.compile(regex)
 
@@ -315,7 +315,7 @@ class GitHubTags(Releases):
                 except IndexError:
                     version = tag_name.group(1)
 
-                self._releases.update({version: self._url + tag['name']})
+                self._releases.update({version: self._tag_url + tag['name']})
 
     def markdown(self, title, url='', replace_url=False):
         return self._fmt_releases(title, url, replace_url)
