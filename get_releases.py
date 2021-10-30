@@ -271,7 +271,7 @@ class HtmlFlatPage(HtmlPage):
 
 class GitHubTags(Releases):
 
-    def __init__(self, repo, regex, replace_url=False):
+    def __init__(self, repo, regex, url='', replace_url=False):
         Releases.__init__(self)
 
         self._api_user = ARGS.user
@@ -282,6 +282,7 @@ class GitHubTags(Releases):
         self._repo = repo
         self._regex = re.compile(regex)
 
+        self._url = url
         self._replace_url = replace_url
 
     def get_releases(self):
@@ -320,8 +321,8 @@ class GitHubTags(Releases):
 
                 self._releases.update({version: self._tag_url + tag['name']})
 
-    def markdown(self, title, url=''):
-        return self._fmt_releases(title, url)
+    def markdown(self, title):
+        return self._fmt_releases(title, self._url)
 
 RELEASES = {
     'Git': HtmlNestedPage('https://public-inbox.org/git/?q=d%3A{:%Y%m%d}..+%5BANNOUNCE%5D+Git'.format(DATE),
@@ -357,7 +358,8 @@ RELEASES = {
                               date={'elt': ['p'],
                                     'pattern': r' - (.* \d{4})$',
                                     'fmt': '%A, %B %d, %Y'}),
-    'GitHub Desktop': GitHubTags('desktop/desktop', r'^release-(\d\.\d\.\d+)$', replace_url=True),
+    'GitHub Desktop': GitHubTags('desktop/desktop', r'^release-(\d\.\d\.\d+)$',
+                                 url='https://desktop.github.com/release-notes/', replace_url=True),
     'Sourcetree': HtmlNestedPage('https://www.sourcetreeapp.com/download-archives',
                                  pattern=r'(\d\.\d\.?\d*\.?\d*)',
                                  parent=['tr'],
@@ -369,8 +371,7 @@ RELEASES = {
 
 def get_result(name, releases):
     if name == 'GitHub Desktop':
-        return releases.markdown(name,
-                                 url='https://desktop.github.com/release-notes/')
+        return releases.markdown(name)
     else:
         return releases.markdown(name)
 
