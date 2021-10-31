@@ -322,6 +322,23 @@ class GitHubTags(Releases):
 
                 self._releases.update({version: self._tag_url + tag['name']})
 
+class MultiReleases(Releases):
+
+    def __init__(self, multi_releases):
+        Releases.__init__(self, '')
+
+        self._multi_releases = multi_releases
+
+    def get_releases(self):
+        for releases in self._multi_releases:
+            releases.get_releases()
+
+    def markdown(self, title):
+        result = format_title(title)
+        for releases in self._multi_releases:
+            result += releases._format_items()
+        return result
+
 RELEASES = {
     'Git': HtmlNestedPage('https://public-inbox.org/git/?q=d%3A{:%Y%m%d}..+%5BANNOUNCE%5D+Git'.format(DATE),
                           pattern=r'^\[ANNOUNCE\] Git v?(\d\.\d+.*)'),
@@ -331,20 +348,20 @@ RELEASES = {
     'GitHub Enterprise': HtmlNestedPage('https://enterprise.github.com/releases/',
                                         parent=['h3'],
                                         date={'elt': ['small'], 'fmt': '%B %d, %Y'}),
-    'GitLab': HtmlNestedPage('https://about.gitlab.com/blog/categories/releases/',
-                             parent=['div', 'blog-hero-excerpt'],
-                             releases={'number': ['p']},
-                             date={'elt': ['a', 'blog-hero-more-link'],
-                                   'link': True,
-                                   'pattern': '/(\d+/\d+/\d+)/',
-                                   'fmt': '%Y/%m/%d'}),
-    'GitLab2': HtmlNestedPage('https://about.gitlab.com/blog/categories/releases/',
-                             parent=['div', 'blog-card-content'],
-                             releases={'number': ['h3']},
-                             date={'elt': ['a', 'blog-card-title'],
-                                   'link': True,
-                                   'pattern': '/(\d+/\d+/\d+)/',
-                                   'fmt': '%Y/%m/%d'}),
+    'GitLab': MultiReleases([HtmlNestedPage('https://about.gitlab.com/blog/categories/releases/',
+                                            parent=['div', 'blog-hero-excerpt'],
+                                            releases={'number': ['p']},
+                                            date={'elt': ['a', 'blog-hero-more-link'],
+                                                  'link': True,
+                                                  'pattern': '/(\d+/\d+/\d+)/',
+                                                  'fmt': '%Y/%m/%d'}),
+                             HtmlNestedPage('https://about.gitlab.com/blog/categories/releases/',
+                                            parent=['div', 'blog-card-content'],
+                                            releases={'number': ['h3']},
+                                            date={'elt': ['a', 'blog-card-title'],
+                                                  'link': True,
+                                                  'pattern': '/(\d+/\d+/\d+)/',
+                                                  'fmt': '%Y/%m/%d'})]),
     'Bitbucket Server': HtmlFlatPage('https://confluence.atlassian.com/bitbucketserver/bitbucket-server-release-notes-872139866.html',
                                      pattern=r'(\d\.\d+)',
                                      releases={'number': ['h2']},
