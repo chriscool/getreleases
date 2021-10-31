@@ -71,9 +71,10 @@ class Releases():
         self._last_date = DATE
         self._debug = ARGS.debug
         self._releases = dict()
+        self._url = ''
         self._replace_url = False
 
-    def _fmt_releases(self, title, url):
+    def _fmt_releases(self, title):
         if not self._releases:
             return ''
 
@@ -84,7 +85,7 @@ class Releases():
             if i > 0:
                 result += ',\n'
 
-            href = url if self._replace_url else urljoin(url, href)
+            href = self._url if self._replace_url else urljoin(self._url, href)
             result += fmt.format(version, href)
 
         return result + '\n'
@@ -120,7 +121,7 @@ class HtmlPage(Releases):
         return soup
 
     def markdown(self, title):
-        return self._fmt_releases(title, self._url)
+        return self._fmt_releases(title)
 
 
 class HtmlNestedPage(HtmlPage):
@@ -322,7 +323,7 @@ class GitHubTags(Releases):
                 self._releases.update({version: self._tag_url + tag['name']})
 
     def markdown(self, title):
-        return self._fmt_releases(title, self._url)
+        return self._fmt_releases(title)
 
 RELEASES = {
     'Git': HtmlNestedPage('https://public-inbox.org/git/?q=d%3A{:%Y%m%d}..+%5BANNOUNCE%5D+Git'.format(DATE),
