@@ -74,7 +74,7 @@ class Releases():
         self._url = ''
         self._replace_url = False
 
-    def _fmt_releases(self, title):
+    def markdown(self, title):
         if not self._releases:
             return ''
 
@@ -119,9 +119,6 @@ class HtmlPage(Releases):
             soup = None
 
         return soup
-
-    def markdown(self, title):
-        return self._fmt_releases(title)
 
 
 class HtmlNestedPage(HtmlPage):
@@ -321,9 +318,6 @@ class GitHubTags(Releases):
                     version = tag_name.group(1)
 
                 self._releases.update({version: self._tag_url + tag['name']})
-
-    def markdown(self, title):
-        return self._fmt_releases(title)
 
 RELEASES = {
     'Git': HtmlNestedPage('https://public-inbox.org/git/?q=d%3A{:%Y%m%d}..+%5BANNOUNCE%5D+Git'.format(DATE),
