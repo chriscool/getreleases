@@ -78,8 +78,11 @@ class Releases():
         if not self._releases:
             return ''
 
-        result = '+ {} '.format(title)
+        return '+ {} '.format(title) + self._format_items()
+
+    def _format_items(self):
         fmt = '[{}]({})'
+        result = ''
 
         for i, (version, href) in enumerate(self._releases.items()):
             if i > 0:
