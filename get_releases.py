@@ -391,7 +391,15 @@ RELEASES = {
                                  releases={'number': ['div'], 'link': ['small']},
                                  date={'elt': ['td'], 'fmt': '%d-%b-%Y'}),
     'tig': HtmlNestedPage('https://public-inbox.org/git/?q=d%3A{:%Y%m%d}..+%5BANNOUNCE%5D tig'.format(DATE),
-                          pattern=r'^\[ANNOUNCE\] tig-(.*)')
+                          pattern=r'^\[ANNOUNCE\] tig-(.*)'),
+    'Gerrit Code Review': HtmlFlatPage('https://gerrit-releases.storage.googleapis.com/',
+                                       pattern=r'gerrit-(\d+\.\d+\.?\d*)\.war',
+                                       parser='xml',
+                                       releases={'number': ['Key']},
+                                       date={'elt': ['LastModified'],
+                                             'pattern': r'(.*)T.*',
+                                             'fmt': '%Y-%m-%d'},
+                                       custom_url='https://www.gerritcodereview.com/{0}.{1}.html#{0}{1}{2}')
 }
 
 if ARGS.list:
