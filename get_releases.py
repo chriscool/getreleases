@@ -65,6 +65,9 @@ def get_date(string, fmt):
     string = re.sub(r'(\d)(th|st|nd)', '\\1', string)
     return datetime.datetime.strptime(string, fmt).date()
 
+def format_title(title):
+    return '+ {} '.format(title)
+
 class Releases():
 
     def __init__(self, url):
@@ -78,7 +81,7 @@ class Releases():
         if not self._releases:
             return ''
 
-        return '+ {} '.format(title) + self._format_items()
+        return format_title(title) + self._format_items()
 
     def _format_items(self):
         fmt = '[{}]({})'
