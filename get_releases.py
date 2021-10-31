@@ -67,11 +67,11 @@ def get_date(string, fmt):
 
 class Releases():
 
-    def __init__(self):
+    def __init__(self, url):
         self._last_date = DATE
         self._debug = ARGS.debug
         self._releases = dict()
-        self._url = ''
+        self._url = url
         self._replace_url = False
 
     def markdown(self, title):
@@ -99,10 +99,8 @@ class Releases():
 class HtmlPage(Releases):
 
     def __init__(self, url, pattern=r'(\d+\.\d+\.?\d*)'):
-        Releases.__init__(self)
+        Releases.__init__(self, url)
         self._pattern = pattern
-
-        self._url = url
 
     def get_releases(self):
         self._soup = self._get_soup()
@@ -270,7 +268,7 @@ class HtmlFlatPage(HtmlPage):
 class GitHubTags(Releases):
 
     def __init__(self, repo, regex, url='', replace_url=False):
-        Releases.__init__(self)
+        Releases.__init__(self, url)
 
         self._api_user = ARGS.user
         self._api_pass = ARGS.password
@@ -280,7 +278,6 @@ class GitHubTags(Releases):
         self._repo = repo
         self._regex = re.compile(regex)
 
-        self._url = url
         self._replace_url = replace_url
 
     def get_releases(self):
