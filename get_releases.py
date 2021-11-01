@@ -104,9 +104,10 @@ class Releases():
 
 class HtmlPage(Releases):
 
-    def __init__(self, url, pattern=r'(\d+\.\d+\.?\d*)'):
+    def __init__(self, url, pattern=r'(\d+\.\d+\.?\d*)', parser='html.parser'):
         Releases.__init__(self, url)
         self._pattern = pattern
+        self._parser = parser
 
     def get_releases(self):
         self._soup = self._get_soup()
@@ -117,7 +118,7 @@ class HtmlPage(Releases):
         request = requests.get(self._url)
 
         if request.ok:
-            soup = BeautifulSoup(request.text, 'html.parser')
+            soup = BeautifulSoup(request.text, self._parser)
         else:
             print('Error {}'.format(request.status_code))
             soup = None
@@ -127,9 +128,9 @@ class HtmlPage(Releases):
 
 class HtmlNestedPage(HtmlPage):
 
-    def __init__(self, url, pattern=r'(\d+\.\d+\.?\d*)',
+    def __init__(self, url, pattern=r'(\d+\.\d+\.?\d*)', parser='html.parser',
                  parent=None, date=None, releases=None):
-        HtmlPage.__init__(self, url, pattern)
+        HtmlPage.__init__(self, url, pattern, parser)
 
         self._parent = parent
         self._date = date
@@ -235,8 +236,9 @@ class HtmlNestedPage(HtmlPage):
 
 class HtmlFlatPage(HtmlPage):
 
-    def __init__(self, url, pattern=r'(\d+\.\d+\.?\d*)', releases=None, date=False):
-        HtmlPage.__init__(self, url, pattern)
+    def __init__(self, url, pattern=r'(\d+\.\d+\.?\d*)', parser='html.parser',
+                 releases=None, date=False):
+        HtmlPage.__init__(self, url, pattern, parser)
 
         self._date = date
         self._rel = releases
