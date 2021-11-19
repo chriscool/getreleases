@@ -237,11 +237,12 @@ class HtmlNestedPage(HtmlPage):
 class HtmlFlatPage(HtmlPage):
 
     def __init__(self, url, pattern=r'(\d+\.\d+\.?\d*)', parser='html.parser',
-                 releases=None, date=False):
+                 releases=None, date=False, custom_url=''):
         HtmlPage.__init__(self, url, pattern, parser)
 
         self._date = date
         self._rel = releases
+        self._custom_url = custom_url
 
     def _explore_next_nodes(self, start_node):
         next_node = start_node
@@ -258,6 +259,13 @@ class HtmlFlatPage(HtmlPage):
                 if datematch:
                     return get_date(datematch.group(1), self._date['fmt'])
 
+    def _get_custom_url(self, relnum):
+        if not self._custom_url:
+            return self._url
+
+        rel_elems = re.findall(r'\d+', relnum)
+        return self._custom_url.format(*rel_elems)
+
     def get_releases(self):
         HtmlPage.get_releases(self)
 
@@ -271,7 +279,7 @@ class HtmlFlatPage(HtmlPage):
                 continue
 
             if relnum:
-                self._releases.update({relnum.group(1): self._url})
+                self._releases.update({relnum.group(1): self._get_custom_url(relnum.group(1))})
 
 class GitHubTags(Releases):
 
