@@ -268,7 +268,7 @@ class HtmlFlatPage(HtmlPage):
             date = self._explore_next_nodes(node)
 
             if date and date < self._last_date:
-                break
+                continue
 
             if relnum:
                 self._releases.update({relnum.group(1): self._url})
