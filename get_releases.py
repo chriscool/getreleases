@@ -3,6 +3,12 @@
 """
 Get various Git-related releases for Git Rev News.
 
+This needs BeautifulSoup 4 and an xml parser. Both can be installed
+with:
+
+    $ pip install bs4
+    $ pip install lxml
+
 This works by parsing a release page or a tag page for each
 supported software.
 
