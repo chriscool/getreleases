@@ -404,8 +404,7 @@ RELEASES = {
                                  parent=['tr'],
                                  releases={'number': ['div'], 'link': ['small']},
                                  date={'elt': ['td'], 'fmt': '%d-%b-%Y'}),
-    'tig': HtmlNestedPage('https://public-inbox.org/git/?q=d%3A{:%Y%m%d}..+%5BANNOUNCE%5D tig'.format(DATE),
-                          pattern=r'^\[ANNOUNCE\] tig-(.*)')
+    'tig': GitHubTags('jonas/tig', r'^tig-(\d\.\d+\.\d+)$')
 }
 
 if ARGS.list:
