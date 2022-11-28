@@ -85,6 +85,7 @@ class Releases():
 
     def markdown(self, title):
         if not self._releases:
+            print('No release for {}!'.format(title))
             return ''
 
         return format_title(title) + self._format_items()
@@ -350,9 +351,15 @@ class MultiReleases(Releases):
             releases.get_releases()
 
     def markdown(self, title):
+        has_release = False
         result = format_title(title)
         for releases in self._multi_releases:
+            if releases:
+                has_release = True
             result += releases._format_items()
+        if not has_release:
+            print('No release for {}!'.format(title))
+            return ''
         return result
 
 RELEASES = {
