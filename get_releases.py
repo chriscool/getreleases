@@ -280,6 +280,8 @@ class HtmlFlatPage(HtmlPage):
     def get_releases(self):
         HtmlPage.get_releases(self)
 
+        self._print_debug('Getting release numbers from {}'.format(*self._rel['number']))
+
         nodes = self._soup.find_all(*self._rel['number'])
 
         for node in nodes:
@@ -403,11 +405,12 @@ RELEASES = {
                                              'pattern': r'(.*)T.*',
                                              'fmt': '%Y-%m-%d'},
                                        custom_url='https://www.gerritcodereview.com/{0}.{1}.html#{0}{1}{2}'),
-    'GitKraken': HtmlFlatPage('https://support.gitkraken.com/release-notes/current',
+    'GitKraken': HtmlFlatPage('https://help.gitkraken.com/gitkraken-client/current/',
                               releases={'number': ['h2']},
                               date={'elt': ['p'],
                                     'pattern': r' - (.* \d{4})$',
-                                    'fmt': '%A, %B %d, %Y'}),
+                                    'fmt': '%A, %B %d, %Y'},
+                              user_agent={'User-Agent': 'Mozilla/5.0'}),
     'GitHub Desktop': GitHubTags('desktop/desktop', r'^release-(\d\.\d\.\d+)$',
                                  url='https://desktop.github.com/release-notes/', replace_url=True),
     'Sourcetree': HtmlNestedPage('https://www.sourcetreeapp.com/download-archives',
