@@ -7,12 +7,13 @@
 #
 # This script can be run like this:
 #
-# $ ../getreleases/publish_edition.sh [<next date>]
+# $ ../getreleases/publish_edition.sh [<next date> [<cur date>]]
 #
-# where <next date> is the publication date for the following edition.
+# where <next date> is the publication date for the following edition
+# and <cur date> is the publication date for the current edition.
 #
-# The publication date for the current edition made from the current
-# draft is today.
+# If <cur date> is not provided, the publication date for the current
+# edition made from the current draft is today.
 #
 # If <next date> is not provided to the script, it will compute it by
 # adding one month to today's date and then finding the following
@@ -60,18 +61,19 @@ perl -e '
 
 # Process arguments
 
-arg="$1"
+arg_next="$1"
+arg_cur="$2"
 
-test "$#" -le 1 ||
-	die "too many arguments" "Usage: $0 [<next date>]"
+test "$#" -le 2 ||
+	die "too many arguments" "Usage: $0 [<next date> [<cur date>]]"
 
 
-# Compute nextdate, the date for the next edition
+# Compute nextdate, the publication date for the next edition
 
-if test -n "$arg"
+if test -n "$arg_next"
 then
-	nextdate=$(date "+%F" --date="$arg") ||
-		die "failed to understand '$arg' as a date"
+	nextdate=$(date "+%F" --date="$arg_next") ||
+		die "failed to understand '$arg_next' as a date"
 else
 	nextdate=$(date "+%F" --date="$today + 1 month")
 	day_of_week=$(date "+%u" --date="$nextdate")
@@ -82,6 +84,19 @@ else
 fi
 
 echo "Next publication date is: $(LANG=C date "+%A %B %d, %Y" --date="$nextdate")"
+
+
+# Compute curdate, the publication date for the current edition
+
+if test -n "$arg_cur"
+then
+	curdate=$(date "+%F" --date="$arg_cur") ||
+		die "failed to understand '$arg_cur' as a date"
+else
+	curdate="$today"
+fi
+
+echo "Current publication date is: $(LANG=C date "+%A %B %d, %Y" --date="$curdate")"
 
 
 # Basic checks
@@ -127,7 +142,7 @@ full_date="$f_month $(add_order_suffix $f_day), $f_year"
 
 # Publish current draft
 
-git mv "$src_dir"/edition-$cur.md "$dst_dir"/$today-edition-$cur.markdown
+git mv "$src_dir"/edition-$cur.md "$dst_dir"/$curdate-edition-$cur.markdown
 
 git commit -m "Publish rn-$cur in $dst_dir/"
 
