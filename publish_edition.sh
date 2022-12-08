@@ -119,7 +119,7 @@ test "$nb_ed" -eq 0 && die "no 'edition-*.md' file in '$src_dir' directory"
 test "$nb_ed" -gt 1 && die "more than one 'edition-*.md' file in '$src_dir' directory"
 
 
-# Find info we need
+# Find edition info we need
 
 edition=$(ls "$src_dir"/edition-*.md)
 
@@ -130,9 +130,10 @@ test -n "$cur" || die "'$edition' should contain a number"
 next=$(expr "$cur" + 1)
 
 
-# Each edition covers the previous month
+# Find dates we need
 
-next_month=$(LANG=C date "+%B %Y")
+cur_month=$(LANG=C date "+%B %Y" --date="$curdate")
+prev_month=$(LANG=C date "+%B %Y" --date="$curdate - 31 days") # doesn't work well with '- 1 month'
 
 f_day=$(LANG=C date "+%-d" --date="$nextdate")
 f_month=$(LANG=C date "+%B" --date="$nextdate")
@@ -166,7 +167,8 @@ perl -pi -e "
 	s/_ED_ORD_ edition/${next_ord} edition/g;
 	s/_ED_DATE_/$nextdate/g;
 	s/_ED_FULL_DATE_/$full_date/g;
-	s/_ED_MONTH_YEAR_/$next_month/g;
+	s/_ED_CUR_MONTH_YEAR_/$cur_month/g;
+	s/_ED_PREV_MONTH_YEAR_/$prev_month/g;
 
 " "$next_ed"
 
