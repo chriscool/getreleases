@@ -133,7 +133,8 @@ next=$(expr "$cur" + 1)
 # Find dates we need
 
 cur_month=$(LANG=C date "+%B %Y" --date="$curdate")
-prev_month=$(LANG=C date "+%B %Y" --date="$curdate - 31 days") # doesn't work well with '- 1 month'
+# prev_month=$(LANG=C date "+%B %Y" --date="$curdate - 31 days") # doesn't work well with '- 1 month'
+next_month=$(LANG=C date "+%B %Y" --date="$curdate + 15 days")
 
 f_day=$(LANG=C date "+%-d" --date="$nextdate")
 f_month=$(LANG=C date "+%B" --date="$nextdate")
@@ -168,7 +169,7 @@ perl -pi -e "
 	s/_ED_DATE_/$nextdate/g;
 	s/_ED_FULL_DATE_/$full_date/g;
 	s/_ED_CUR_MONTH_YEAR_/$cur_month/g;
-	s/_ED_PREV_MONTH_YEAR_/$prev_month/g;
+	s/_ED_NEXT_MONTH_YEAR_/$next_month/g;
 
 " "$next_ed"
 
