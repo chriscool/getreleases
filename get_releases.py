@@ -14,7 +14,7 @@ supported software.
 
 Currently supports : Git, Git for Windows, libgit2, libgit2sharp,
 GitHub Enterprise, GitLab, Bitbucket, GitKraken, GitHub Desktop,
-tig, Sourcetree.
+tig, Sourcetree, git-credential-oauth.
 
 To get help about all the supported options, this should be used
 like this:
@@ -418,7 +418,8 @@ RELEASES = {
                                  parent=['tr'],
                                  releases={'number': ['div'], 'link': ['small']},
                                  date={'elt': ['td'], 'fmt': '%d-%b-%Y'}),
-    'tig': GitHubTags('jonas/tig', r'^tig-(\d\.\d+\.\d+)$')
+    'tig': GitHubTags('jonas/tig', r'^tig-(\d\.\d+\.\d+)$'),
+    'git-credential-oauth': GitHubTags('hickford/git-credential-oauth', r'^v(\d\.\d+\.\d+)$')
 }
 
 if ARGS.list:
