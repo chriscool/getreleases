@@ -33,9 +33,6 @@ This edition covers what happened during the months of _ED_CUR_MONTH_YEAR_ and _
 ## Developer Spotlight:
 -->
 
-## Releases
-
-
 ## Other News
 
 __Various__
@@ -48,6 +45,9 @@ __Easy watching__
 -->
 
 __Git tools and sites__
+
+
+## Releases
 
 
 ## Credits
