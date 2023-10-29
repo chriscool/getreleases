@@ -68,7 +68,7 @@ else:
     DATE = datetime.date.today() - datetime.timedelta(days=30)
 
 def get_date(string, fmt):
-    string = re.sub(r'(\d)(th|st|nd)', '\\1', string)
+    string = re.sub(r'(\d)(th|st|nd|rd)', '\\1', string)
     return datetime.datetime.strptime(string, fmt).date()
 
 def format_title(title):
