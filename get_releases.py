@@ -419,8 +419,8 @@ RELEASES = {
                                  releases={'number': ['div'], 'link': ['small']},
                                  date={'elt': ['td'], 'fmt': '%d-%b-%Y'}),
     'tig': GitHubTags('jonas/tig', r'^tig-(\d\.\d+\.\d+)$'),
-    'garden': GitHubTags('garden-rs/garden', r'^v(\d\.\d+\.\d+)$'),
-    'git-cola': GitHubTags('git-cola/git-cola', r'^v(\d\.\d+\.\d+)$'),
+    'Garden': GitHubTags('garden-rs/garden', r'^v(\d\.\d+\.\d+)$'),
+    'Git Cola': GitHubTags('git-cola/git-cola', r'^v(\d\.\d+\.\d+)$'),
     'git-credential-azure': GitHubTags('hickford/git-credential-azure', r'^v(\d\.\d+\.\d+)$'),
     'git-credential-oauth': GitHubTags('hickford/git-credential-oauth', r'^v(\d\.\d+\.\d+)$')
 }
