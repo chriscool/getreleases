@@ -198,14 +198,23 @@ class HtmlNestedPage(HtmlPage):
         if 'pattern' in self._date:
             self._print_debug('Searching pattern: {}'.format(self._date['pattern']))
             match = re.search(self._date['pattern'], string)
+            if not match:
+               print(f"Warning: Date pattern '{self._date['pattern']}' not found in string '{string}'")
+               return None
             string = match.group(1)
             self._print_debug('String after pattern: {}'.format(string))
 
-        try:
-            date = get_date(string, self._date['fmt'])
-            self._print_debug('Date found: {}'.format(date))
-        except ValueError:
-            date = None
+        date = None
+        formats = self._date['fmt']
+        if not isinstance(formats, list):
+            formats = [formats]
+
+        for fmt in formats:
+            parsed_date = get_date(string, fmt)
+            if parsed_date:
+                date = parsed_date
+                self._print_debug(f"Date found using format '{fmt}': {date}")
+                break
 
         return date
 
@@ -423,7 +432,8 @@ RELEASES = {
                                  pattern=r'(\d\.\d\.?\d*\.?\d*)',
                                  parent=['tr'],
                                  releases={'number': ['div'], 'link': ['small']},
-                                 date={'elt': ['td'], 'fmt': '%d-%b-%Y'}),
+                                 date={'elt': ['td', {'data-label': 'Build Date'}],
+                                       'fmt': ['%d-%b-%Y', '%d-%B-%Y']}),
     'tig': GitHubTags('jonas/tig', r'^tig-(\d\.\d+\.\d+)$'),
     'Garden': GitHubTags('garden-rs/garden', r'^v(\d\.\d+\.\d+)$'),
     'Git Cola': GitHubTags('git-cola/git-cola', r'^v(\d\.\d+\.\d+)$'),
