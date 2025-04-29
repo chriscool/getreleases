@@ -69,7 +69,13 @@ else:
 
 def get_date(string, fmt):
     string = re.sub(r'(\d)(th|st|nd|rd)', '\\1', string)
-    return datetime.datetime.strptime(string, fmt).date()
+    try:
+        # Try to parse the date
+        return datetime.datetime.strptime(string, fmt).date()
+    except ValueError as e:
+        # If parsing fails, print a warning and return None
+        print(f"Warning: Could not parse date string '{string}' with format '{fmt}'. Error: {e}")
+        return None
 
 def format_title(title):
     return '+ {} '.format(title)
