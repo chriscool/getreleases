@@ -391,7 +391,7 @@ RELEASES = {
     'libgit2sharp': GitHubTags('libgit2/libgit2sharp', r'^v(\d\.\d+\.?\d*)$'),
     'GitHub Enterprise': HtmlNestedPage('https://enterprise.github.com/releases/',
                                         parent=['h3'],
-                                        date={'elt': ['small'], 'fmt': '%B %d, %Y'}),
+                                        date={'elt': ['small', {'class': 'release-date'}], 'fmt': '%B %d, %Y'}),
     'GitLab': MultiReleases([HtmlNestedPage('https://about.gitlab.com/blog/categories/releases/',
                                             parent=['div', 'blog-hero-content'],
                                             releases={'number': ['h2']},
