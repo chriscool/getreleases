@@ -404,7 +404,7 @@ RELEASES = {
 #                                           'pattern': '(.*)',
 #                                           'fmt': '%d %B %Y'}),
     'Gerrit Code Review': HtmlFlatPage('https://gerrit-releases.storage.googleapis.com/',
-                                       pattern=r'gerrit-(\d+\.\d+\.?\d*)\.war',
+                                       pattern=r'gerrit-(\d+\.\d+.*)\.war',
                                        parser='xml',
                                        releases={'number': ['Key']},
                                        date={'elt': ['LastModified'],
