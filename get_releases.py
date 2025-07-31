@@ -439,7 +439,7 @@ RELEASES = {
     'GitButler': GitHubTags('gitbutlerapp/gitbutler', r'^release/(\d\.\d+\.\d+)$'),
     'Sublime Merge': HtmlNestedPage('https://www.sublimemerge.com/download',
                                     parent=['article'],
-                                    pattern=r'Build\s+(\d+)',
+                                    pattern=r'(Build\s+\d+)',
                                     releases={'number': ['h3']},
                                     date={'elt': ['div', {'class': 'release-date'}],
                                           'fmt': ['%d %B %Y', '%d %b %Y']}),
