@@ -210,11 +210,6 @@ class HtmlNestedPage(HtmlPage):
             string = match.group(1)
             self._print_debug('String after pattern: {}'.format(string))
 
-        date = None
-        formats = self._date['fmt']
-        if not isinstance(formats, list):
-            formats = [formats]
-
         date = get_date(string, self._date['fmt'])
         if date:
             self._print_debug(f"Date found: {date}")
