@@ -442,6 +442,12 @@ RELEASES = {
     'Garden': GitHubTags('garden-rs/garden', r'^v(\d\.\d+\.\d+)$'),
     'Git Cola': GitHubTags('git-cola/git-cola', r'^v(\d\.\d+\.\d+)$'),
     'GitButler': GitHubTags('gitbutlerapp/gitbutler', r'^release/(\d\.\d+\.\d+)$'),
+    'Sublime Merge': HtmlNestedPage('https://www.sublimemerge.com/download',
+                                    parent=['article'],
+                                    pattern=r'Build\s+(\d+)',
+                                    releases={'number': ['h3']},
+                                    date={'elt': ['div', {'class': 'release-date'}],
+                                          'fmt': ['%d %B %Y', '%d %b %Y']}),
     'git-credential-azure': GitHubTags('hickford/git-credential-azure', r'^v(\d\.\d+\.\d+)$'),
     'git-credential-oauth': GitHubTags('hickford/git-credential-oauth', r'^v(\d\.\d+\.\d+)$'),
 }
