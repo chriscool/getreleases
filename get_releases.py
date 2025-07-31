@@ -381,6 +381,54 @@ class MultiReleases(Releases):
             return ''
         return result
 
+class GitHubReleases(Releases):
+    """
+    Get releases from the GitHub Releases API.
+    """
+    def __init__(self, repo, include_prereleases=False, pattern=None, version_format=None):
+        Releases.__init__(self, f"https://github.com/{repo}/releases")
+        self._api_url = f"https://api.github.com/repos/{repo}/releases"
+        self._api_user = ARGS.user
+        self._api_pass = ARGS.password
+        self._repo = repo
+        self._include_prereleases = include_prereleases
+        self._pattern = re.compile(pattern) if pattern else None
+        self._version_format = version_format
+
+    def get_releases(self):
+        print(f"> Getting releases from GitHub API: {self._repo}")
+        try:
+            request = requests.get(self._api_url, auth=(self._api_user, self._api_pass))
+            request.raise_for_status()
+            releases = request.json()
+        except requests.exceptions.RequestException as e:
+            print(f"Error querying GitHub API: {e}")
+            return
+
+        for release in releases:
+            if release.get('prerelease') and not self._include_prereleases:
+                continue
+
+            date_str = release.get('published_at', '').split('T')[0]
+            if not date_str:
+                continue
+
+            release_date = get_date(date_str, '%Y-%m-%d')
+            if not release_date or release_date < self._last_date:
+                continue
+
+            tag_name = release.get('tag_name')
+            url = release.get('html_url')
+            if tag_name and url:
+                display_version = tag_name
+                # If a pattern and format are provided, try to reformat the tag
+                if self._pattern and self._version_format:
+                    match = self._pattern.match(tag_name)
+                    if match:
+                        display_version = self._version_format.format(*match.groups())
+
+                self._releases[display_version] = url
+
 RELEASES = {
     'Git': HtmlNestedPage('https://lore.kernel.org/git/?q=d%3A{:%Y%m%d}..+%5BANNOUNCE%5D+Git'.format(DATE),
                           pattern=r'^\[ANNOUNCE\] Git v?(\d\.\d+.*)',
