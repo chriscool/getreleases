@@ -384,7 +384,7 @@ class MultiReleases(Releases):
         return result
 
 RELEASES = {
-    'Git': HtmlNestedPage('https://public-inbox.org/git/?q=d%3A{:%Y%m%d}..+%5BANNOUNCE%5D+Git'.format(DATE),
+    'Git': HtmlNestedPage('https://lore.kernel.org/git/?q=d%3A{:%Y%m%d}..+%5BANNOUNCE%5D+Git'.format(DATE),
                           pattern=r'^\[ANNOUNCE\] Git v?(\d\.\d+.*)'),
     'Git for Windows': GitHubTags('git-for-windows/git', r'^v(\d\.\d+\.\d+.*)\.windows\.(\d)$'),
     'libgit2': GitHubTags('libgit2/libgit2', r'^v(\d\.\d+\.\d+)$'),
