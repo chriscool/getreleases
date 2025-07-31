@@ -69,13 +69,19 @@ else:
 
 def get_date(string, fmt):
     string = re.sub(r'(\d)(th|st|nd|rd)', '\\1', string)
-    try:
-        # Try to parse the date
-        return datetime.datetime.strptime(string, fmt).date()
-    except ValueError as e:
-        # If parsing fails, print a warning and return None
-        print(f"Warning: Could not parse date string '{string}' with format '{fmt}'. Error: {e}")
-        return None
+
+    formats = fmt if isinstance(fmt, list) else [fmt]
+
+    for format_str in formats:
+        try:
+            # Try to parse the date
+            return datetime.datetime.strptime(string, format_str).date()
+        except ValueError as e:
+            continue
+
+    # If all formats failed, print a warning and return None
+    print(f"Warning: Could not parse date string '{string}' with any of the formats: {formats}")
+    return None
 
 def format_title(title):
     return '+ {} '.format(title)
@@ -209,12 +215,9 @@ class HtmlNestedPage(HtmlPage):
         if not isinstance(formats, list):
             formats = [formats]
 
-        for fmt in formats:
-            parsed_date = get_date(string, fmt)
-            if parsed_date:
-                date = parsed_date
-                self._print_debug(f"Date found using format '{fmt}': {date}")
-                break
+        date = get_date(string, self._date['fmt'])
+        if date:
+            self._print_debug(f"Date found: {date}")
 
         return date
 
