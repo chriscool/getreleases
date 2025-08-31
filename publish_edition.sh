@@ -20,6 +20,9 @@
 # wednesday.
 #
 
+# Global environment
+
+export LANG=C
 
 # Repo related constants
 
@@ -83,7 +86,7 @@ else
 		nextdate=$(date "+%F" --date="$nextdate + $(( 10 - $day_of_week )) days")
 fi
 
-echo "Next publication date is: $(LANG=C date "+%A %B %d, %Y" --date="$nextdate")"
+echo "Next publication date is: $(date "+%A %B %d, %Y" --date="$nextdate")"
 
 
 # Compute curdate, the publication date for the current edition
@@ -96,7 +99,7 @@ else
 	curdate="$today"
 fi
 
-echo "Current publication date is: $(LANG=C date "+%A %B %d, %Y" --date="$curdate")"
+echo "Current publication date is: $(date "+%A %B %d, %Y" --date="$curdate")"
 
 
 # Basic checks
@@ -132,13 +135,13 @@ next=$(expr "$cur" + 1)
 
 # Find dates we need
 
-cur_month=$(LANG=C date "+%B %Y" --date="$curdate")
-# prev_month=$(LANG=C date "+%B %Y" --date="$curdate - 31 days") # doesn't work well with '- 1 month'
-next_month=$(LANG=C date "+%B %Y" --date="$curdate + 15 days")
+cur_month=$(date "+%B %Y" --date="$curdate")
+# prev_month=$(date "+%B %Y" --date="$curdate - 31 days") # doesn't work well with '- 1 month'
+next_month=$(date "+%B %Y" --date="$curdate + 15 days")
 
-f_day=$(LANG=C date "+%-d" --date="$nextdate")
-f_month=$(LANG=C date "+%B" --date="$nextdate")
-f_year=$(LANG=C date "+%Y" --date="$nextdate")
+f_day=$(date "+%-d" --date="$nextdate")
+f_month=$(date "+%B" --date="$nextdate")
+f_year=$(date "+%Y" --date="$nextdate")
 full_date="$f_month $(add_order_suffix $f_day), $f_year"
 
 
