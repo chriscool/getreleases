@@ -135,9 +135,19 @@ next=$(expr "$cur" + 1)
 
 # Find dates we need
 
-cur_month=$(date "+%B %Y" --date="$curdate")
-# prev_month=$(date "+%B %Y" --date="$curdate - 31 days") # doesn't work well with '- 1 month'
-next_month=$(date "+%B %Y" --date="$curdate + 15 days")
+next_month_date=$(date "+%F" --date="$curdate + 15 days")
+next_month=$(date "+%B %Y" --date="$next_month_date")
+cur_year=$(date "+%Y" --date="$curdate")
+next_year=$(date "+%Y" --date="$next_month_date")
+
+# Set cur_month conditionally based on the year comparison
+if [ "$cur_year" = "$next_year" ]; then
+    # If the years are the same, just use the month name
+    cur_month=$(date "+%B" --date="$curdate")
+else
+    # Otherwise, include the year for clarity
+    cur_month=$(date "+%B %Y" --date="$curdate")
+fi
 
 f_day=$(date "+%-d" --date="$nextdate")
 f_month=$(date "+%B" --date="$nextdate")
