@@ -235,8 +235,10 @@ class HtmlNestedPage(HtmlPage):
             return
 
         self._print_debug('Getting relnum from ({}) ({}):'.format(self._pattern, rel.text))
-        relnum = re.search(self._pattern, rel.text)
-        relnum = relnum.group(1)
+        versions = re.findall(self._pattern, rel.text)
+        if not versions:
+            return
+        relnum = ', '.join(versions)
         self._print_debug(relnum)
 
         if 'link' in self._rel:
