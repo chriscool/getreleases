@@ -104,20 +104,20 @@ class Releases():
             print('No release for {}!'.format(title))
             return ''
 
-        return format_title(title) + self._format_items()
+        return format_title(title) + self._format_items() + '\n'
 
-    def _format_items(self):
+    def _format_items(self, start_index=0):
         fmt = '[{}]({})'
         result = ''
 
-        for i, (version, href) in enumerate(self._releases.items()):
+        for i, (version, href) in enumerate(self._releases.items(), start=start_index):
             if i > 0:
                 result += ',\n'
 
             href = self._url if self._replace_url else urljoin(self._url, href)
             result += fmt.format(version, href)
 
-        return result + '\n'
+        return result
 
     def _print_debug(self, string):
         if self._debug:
@@ -374,16 +374,16 @@ class MultiReleases(Releases):
             releases.get_releases()
 
     def markdown(self, title):
-        has_release = False
+        total_items = 0
         result = format_title(title)
         for releases in self._multi_releases:
-            if releases:
-                has_release = True
-            result += releases._format_items()
-        if not has_release:
+            if releases._releases:
+                result += releases._format_items(start_index=total_items)
+                total_items += len(releases._releases)
+        if total_items == 0:
             print('No release for {}!'.format(title))
             return ''
-        return result
+        return result + '\n'
 
 class GitHubReleases(Releases):
     """
