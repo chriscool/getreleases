@@ -70,6 +70,10 @@ else:
 def get_date(string, fmt):
     string = re.sub(r'(\d)(th|st|nd|rd)', '\\1', string)
 
+    # Use word boundary \b to replace 'Sept' only when it's a whole word
+    # (useful for SourceTree)
+    string = re.sub(r'\bSept\b', 'Sep', string)
+
     formats = fmt if isinstance(fmt, list) else [fmt]
 
     for format_str in formats:
