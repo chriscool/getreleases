@@ -57,7 +57,8 @@ PARSER.add_argument('-s', '--since', help='Get releases since that date. Format:
 PARSER.add_argument('-u', '--user', help='GitHub API user (required for GitHub repos).')
 PARSER.add_argument('-p', '--password', help='GitHub API password (required for GitHub repos).')
 PARSER.add_argument('-l', '--list', help='List supported software and their URL.', action="store_true")
-PARSER.add_argument('-g', '--get', help='Get releases only for this software.')
+PARSER.add_argument('-g', '--get', help='Get releases only for software matching that string.')
+PARSER.add_argument('-e', '--exact', help='Perform an exact, case-sensitive match when using --get.', action='store_true')
 PARSER.add_argument('-d', '--debug', help='Show debugging information.', action="store_true")
 
 ARGS = PARSER.parse_args()
@@ -512,10 +513,14 @@ if ARGS.list:
     exit(0)
 
 if ARGS.get:
-    print('Getting releases only for {} since {}\n'.format(ARGS.get, DATE))
-    pattern = re.compile(ARGS.get, re.IGNORECASE)
+    if ARGS.exact:
+        print('Getting releases for exactly "{}" since {}\n'.format(ARGS.get, DATE))
+    else:
+        print('Getting releases only for software matching "{}" since {}\n'.format(ARGS.get, DATE))
+        pattern = re.compile(ARGS.get, re.IGNORECASE)
+
     for name, releases in RELEASES.items():
-        if pattern.match(name):
+        if (ARGS.exact and name == ARGS.get) or (not ARGS.exact and pattern.match(name)):
             releases.get_releases()
             print(releases.markdown(name))
     exit(0)
