@@ -65,11 +65,38 @@ perl -e '
 
 # Process arguments
 
-arg_next="$1"
-arg_cur="$2"
+arg_next=""
+arg_cur=""
+token=""
 
-test "$#" -le 2 ||
-	die "too many arguments" "Usage: $0 [<next date> [<cur date>]]"
+while test "$#" -gt 0
+do
+	case "$1" in
+	--token)
+		test "$#" -ge 2 || die "--token requires an argument"
+		token="$2"
+		shift 2
+		;;
+	-*)
+		die "unknown option '$1'"
+		;;
+	*)
+		if test -z "$arg_next"
+		then
+			arg_next="$1"
+		elif test -z "$arg_cur"
+		then
+			arg_cur="$1"
+		else
+			die "too many arguments" "Usage: $0 [--token <token>] [<next date> [<cur date>]]"
+		fi
+		shift
+		;;
+	esac
+done
+
+test -n "$token" &&
+	export GH_TOKEN="$token"
 
 
 # Compute nextdate, the publication date for the next edition
@@ -126,7 +153,8 @@ type gh >/dev/null ||
 	die "gh not found" "we need the GitHub CLI (gh) to create the issue"
 
 gh auth status >/dev/null 2>&1 ||
-    die "gh is not logged in" "please run 'gh auth login' or 'export GH_TOKEN=...'"
+	die "gh is not logged in" \
+	    "please use '--token <token>' or 'export GH_TOKEN=...' or run 'gh auth login'"
 
 
 # Find edition info we need
