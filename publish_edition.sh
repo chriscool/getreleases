@@ -152,8 +152,8 @@ test -d "$dst_dir" || die "no destination '$dst_dir' directory"
 
 nb_ed=$(ls "$src_dir"/edition-*.md | wc -l)
 
-test "$nb_ed" -eq 0 && die "no 'edition-*.md' file in '$src_dir' directory"
-test "$nb_ed" -gt 1 && die "more than one 'edition-*.md' file in '$src_dir' directory"
+test "$nb_ed" -le 1 || die "more than one 'edition-*.md' file in '$src_dir' directory"
+test "$nb_ed" -ne 0 || die "no 'edition-*.md' file in '$src_dir' directory"
 
 type gh >/dev/null ||
 	die "gh not found" "we need the GitHub CLI (gh) to create the issue"
