@@ -7,10 +7,16 @@
 #
 # This script can be run like this:
 #
-# $ ../getreleases/publish_edition.sh [<next date> [<cur date>]]
+# $ ../getreleases/publish_edition.sh [--token <token>] [<next date> [<cur date>]]
 #
-# where <next date> is the publication date for the following edition
-# and <cur date> is the publication date for the current edition.
+# where:
+# - <token> is an optional GitHub Personal Access Token (PAT) with
+#   'public_repo' scope. It is used to authenticate the GitHub CLI
+#   (gh) to create the issue for the next edition. If not provided,
+#   'gh' must be already authenticated (e.g. via 'gh auth login' or
+#   the GH_TOKEN env var).
+# - <next date> is the publication date for the following edition.
+# - <cur date> is the publication date for the current edition.
 #
 # If <cur date> is not provided, the publication date for the current
 # edition made from the current draft is today.
