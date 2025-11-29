@@ -251,7 +251,7 @@ echo "Creating GitHub issue for edition $next..."
 # Construct the issue body
 issue_body="A currently mostly empty draft is there:
 
-https://github.com/$repo_name/blob/master/rev_news/drafts/edition-$next.md
+https://github.com/$repo_name/blob/$main_branch/rev_news/drafts/edition-$next.md
 
 Feel free to comment in this issue, suggest topics, suggest persons to interview, or use the edit button (that looks like a pen) to edit and create a pull request with the changes you would like.
 
