@@ -198,6 +198,18 @@ git add "$next_ed" ||
 
 git commit -m "Add draft for rn-$next"
 
+
+# Sync with upstream and push
+
+echo "Syncing with upstream..."
+
+git pull --rebase origin "$main_branch" ||
+	die "failed to 'git pull --rebase'"
+
+echo "Pushing changes to origin..."
+git push origin "$main_branch" ||
+	die "failed to 'git push'"
+
 # Create GitHub Issue for the next edition
 
 echo "Creating GitHub issue for edition $next..."
@@ -221,4 +233,4 @@ gh issue create \
     --title "Any comment about upcoming Git Rev News edition $next" \
     --body "$issue_body"
 
-echo "Issue created successfully. Remember to 'git push' so the draft link in the issue becomes valid!"
+echo "Success! The edition is published, the next draft is created, and the GitHub issue is live."
