@@ -26,7 +26,8 @@ export LANG=C
 
 # Repo related constants
 
-repo_url="https://github.com/git/git.github.io.git"
+repo_name="git/git.github.io"
+repo_url="https://github.com/$repo_name.git"
 known_good_commit="5bc243932ea7938830757e8370df6bd86df39cab"
 src_dir="rev_news/drafts"
 dst_dir="_posts"
@@ -121,6 +122,12 @@ nb_ed=$(ls "$src_dir"/edition-*.md | wc -l)
 test "$nb_ed" -eq 0 && die "no 'edition-*.md' file in '$src_dir' directory"
 test "$nb_ed" -gt 1 && die "more than one 'edition-*.md' file in '$src_dir' directory"
 
+type gh >/dev/null ||
+	die "gh not found" "we need the GitHub CLI (gh) to create the issue"
+
+gh auth status >/dev/null 2>&1 ||
+    die "gh is not logged in" "please run 'gh auth login' or 'export GH_TOKEN=...'"
+
 
 # Find edition info we need
 
@@ -191,3 +198,27 @@ git add "$next_ed" ||
 
 git commit -m "Add draft for rn-$next"
 
+# Create GitHub Issue for the next edition
+
+echo "Creating GitHub issue for edition $next..."
+
+# Construct the issue body
+issue_body="A currently mostly empty draft is there:
+
+https://github.com/$repo_name/blob/master/rev_news/drafts/edition-$next.md
+
+Feel free to comment in this issue, suggest topics, suggest persons to interview, or use the edit button (that looks like a pen) to edit and create a pull request with the changes you would like.
+
+Let's try to publish this edition around the end of $f_month $f_year!
+
+Thanks!
+
+cc @jnareb @mjaix @sivaraam @gitster @stepnem"
+
+# Create the issue
+gh issue create \
+    --repo "$repo_name" \
+    --title "Any comment about upcoming Git Rev News edition $next" \
+    --body "$issue_body"
+
+echo "Issue created successfully. Remember to 'git push' so the draft link in the issue becomes valid!"
