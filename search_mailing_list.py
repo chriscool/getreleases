@@ -443,6 +443,9 @@ class ThreadSelectorTUI:
 
     def run(self) -> List[str]:
         """Main entry point for the TUI."""
+        if not self.threads:
+            return []
+
         def curses_main(stdscr):
             curses.curs_set(0)
 
