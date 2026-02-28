@@ -233,12 +233,18 @@ class ThreadSelectorTUI:
             lines = result.stdout.splitlines()
 
             body_lines = []
-            in_body = False
-            for line in lines[:50]:
-                if in_body:
-                    body_lines.append(line)
-                elif line == '':
-                    in_body = True
+            header_ended = False
+
+            for idx, line in enumerate(lines):
+                if not header_ended:
+                    if line == '':
+                        next_line = lines[idx + 1] if idx + 1 < len(lines) else ''
+                        if not next_line or next_line[0] not in ' \t':
+                            header_ended = True
+                    if not header_ended:
+                        continue
+
+                body_lines.append(line)
 
             self._preview_cache[cache_key] = body_lines[:max_lines]
             return self._preview_cache[cache_key]
