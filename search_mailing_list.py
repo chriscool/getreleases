@@ -315,6 +315,48 @@ def analyze_threads(messages):
     print(f"Filtered out: {dropped_counts['count']} by size, {dropped_counts['age']} by date.", file=sys.stderr)
     return valid_threads
 
+def show_help(stdscr):
+    """Display help screen."""
+    h, w = stdscr.getmaxyx()
+
+    while True:
+        stdscr.clear()
+
+        lines = [
+            "Help - Key Bindings",
+            "=" * 30,
+            "",
+            "Navigation:",
+            "  k / Up      - Move cursor up",
+            "  j / Down    - Move cursor down",
+            "",
+            "Selection:",
+            "  Space       - Toggle selection of current thread",
+            "  a           - Toggle select all / deselect all",
+            "",
+            "Search:",
+            "  /           - Start searching",
+            "  n           - Go to next match",
+            "  p           - Go to previous match",
+            "  Enter       - Confirm search and jump to match",
+            "  Escape      - Cancel search",
+            "",
+            "Other:",
+            "  ?           - Show this help",
+            "  Q           - Quit and return selected threads",
+            "",
+            "Press any key to return...",
+        ]
+
+        start_y = max(0, (h - len(lines)) // 2)
+        for i, line in enumerate(lines):
+            stdscr.addstr(start_y + i, max(0, (w - len(line)) // 2), line)
+
+        key = stdscr.getch()
+        break
+
+    stdscr.clear()
+
 def select_threads_curses(threads):
     """Interactive thread selection using curses."""
     def curses_main(stdscr):
@@ -346,7 +388,7 @@ def select_threads_curses(threads):
             if searching:
                 title = f"Search: {search_term} (Enter: done, Esc: cancel)"
             else:
-                title = f"Select threads (/ search, n next, p prev, Space toggle, Enter done, Q quit)"
+                title = f"Select threads (/ search, n next, p prev, ? help, Space toggle, Q quit)"
             stdscr.addstr(0, 0, title[:w-1])
             stdscr.addstr(1, 0, f"{'Age':<3} | {'Msgs':<4} | {'Ppl':<3} | {'Blob ID':<8} | {'Subject':<{subject_width}}")
             stdscr.addstr(2, 0, "-" * min(w - 1, fixed_width + subject_width))
@@ -405,6 +447,8 @@ def select_threads_curses(threads):
                     selected[cursor] = not selected[cursor]
                 elif key in (ord('q'), ord('Q')):
                     return []
+                elif key == ord('?'):
+                    show_help(stdscr)
                 elif key == ord('a'):
                     all_selected = all(selected)
                     selected = [not all_selected] * len(threads)
