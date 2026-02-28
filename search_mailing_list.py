@@ -305,10 +305,13 @@ def select_threads_curses(threads):
             stdscr.clear()
             h, w = stdscr.getmaxyx()
 
+            fixed_width = 3 + 4 + 3 + 8 + 12 + 3
+            subject_width = max(20, w - fixed_width - 1)
+
             title = f"Select threads (Space: toggle, Enter: done, Q: quit)"
             stdscr.addstr(0, 0, title[:w-1])
-            stdscr.addstr(1, 0, f"{'Age':<3} | {'Msgs':<4} | {'Ppl':<3} | {'Blob ID':<8} | {'Subject':<40}")
-            stdscr.addstr(2, 0, "-" * min(w, 70))
+            stdscr.addstr(1, 0, f"{'Age':<3} | {'Msgs':<4} | {'Ppl':<3} | {'Blob ID':<8} | {'Subject':<{subject_width}}")
+            stdscr.addstr(2, 0, "-" * min(w - 1, fixed_width + subject_width))
 
             visible_rows = h - 4
             if offset > cursor:
@@ -323,8 +326,8 @@ def select_threads_curses(threads):
 
                 t = threads[i]
                 marker = "[X]" if selected[i] else "[ ]"
-                subject = t['subject'][:40] + "..." if len(t['subject']) > 40 else t['subject']
-                line = f"{t['age_days']:<3} | {t['count']:<4} | {t['participants']:<3} | {t['blob']:<8} | {marker} {subject}"
+                subject = t['subject'][:subject_width-3] + "..." if len(t['subject']) > subject_width else t['subject']
+                line = f"{t['age_days']:<3} | {t['count']:<4} | {t['participants']:<3} | {t['blob']:<8} | {marker} {subject:<{subject_width}}"
 
                 if i == cursor:
                     stdscr.addstr(row, 0, line[:w-1], curses.A_REVERSE)
