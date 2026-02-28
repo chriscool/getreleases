@@ -297,7 +297,10 @@ def main():
 
     summarizable_threads.sort(key=lambda x: x['age_days'])
 
-    term_width = os.get_terminal_size().columns or 130
+    try:
+        term_width = os.get_terminal_size().columns or 130
+    except OSError:
+        term_width = 130
     fixed_width = 3 + 4 + 3 + 8 + 12
     subject_width = max(20, term_width - fixed_width)
 
