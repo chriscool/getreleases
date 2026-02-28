@@ -186,7 +186,7 @@ class MailingListStore:
 class ThreadSelectorTUI:
     """Manages the curses-based thread selection interface."""
 
-    def __init__(self, threads: List[Dict[str, Any]]):
+    def __init__(self, threads: List[Dict[str, Any]], repo_path: Optional[str] = None):
         self.threads = threads
         self.selected = [False] * len(threads)
         self.cursor = 0
@@ -196,6 +196,44 @@ class ThreadSelectorTUI:
         self.current_match_idx = -1
         self.searching = False
         self.show_help_overlay = False
+        self.show_preview = True
+        self.repo_path = repo_path
+        self._preview_cache = {}
+
+    def fetch_email_body(self, blob_id: str) -> List[str]:
+        """Fetch the email body using git show."""
+        if blob_id in self._preview_cache:
+            return self._preview_cache[blob_id]
+
+        if not self.repo_path:
+            return []
+
+        try:
+            cmd = ["git", "show", blob_id]
+            cwd = None
+            if os.path.isdir(self.repo_path):
+                v2_all = os.path.join(self.repo_path, "all.git")
+                if os.path.isdir(v2_all):
+                    cwd = v2_all
+                else:
+                    cwd = self.repo_path
+
+            result = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, errors='replace', timeout=10)
+
+            lines = result.stdout.splitlines()
+
+            body_lines = []
+            in_body = False
+            for line in lines[:50]:
+                if in_body:
+                    body_lines.append(line)
+                elif line == '':
+                    in_body = True
+
+            self._preview_cache[blob_id] = body_lines[:10]
+            return self._preview_cache[blob_id]
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+            return []
 
     def find_matches(self, term: str) -> List[int]:
         """Find thread indices matching the search term."""
@@ -230,6 +268,7 @@ class ThreadSelectorTUI:
             "  Escape      - Cancel search",
             "",
             "Other:",
+            "  P           - Toggle preview window",
             "  ?           - Show this help",
             "  Q           - Quit and return selected threads",
             "",
@@ -252,16 +291,36 @@ class ThreadSelectorTUI:
         stdscr.clear()
         h, w = stdscr.getmaxyx()
 
+        if self.show_preview and w >= 105:
+            list_width = 75
+            if w < list_width + 30:
+                list_width = max(50, w - 35)
+            preview_width = w - list_width - 1
+            show_preview = True
+        else:
+            list_width = w - 1
+            preview_width = 0
+            show_preview = False
+
         fixed_width = 3 + 4 + 3 + 8 + 12 + 3
-        subject_width = max(20, w - fixed_width - 1)
+        subject_width = max(20, list_width - fixed_width - 1)
 
         if self.searching:
             title = f"Search: {self.search_term} (Enter: done, Esc: cancel)"
         else:
-            title = f"Select threads (/ search, n next, p prev, ? help, Space toggle, Q quit)"
-        stdscr.addstr(0, 0, title[:w-1])
-        stdscr.addstr(1, 0, f"{'Age':<3} | {'Msgs':<4} | {'Ppl':<3} | {'Blob ID':<8} | {'Subject':<{subject_width}}")
-        stdscr.addstr(2, 0, "-" * min(w - 1, fixed_width + subject_width))
+            title = f"Select threads (/ search, n/p next/prev match, P preview, ? help, Space toggle, Q quit)"
+        stdscr.addstr(0, 0, title[:list_width-1])
+        if show_preview:
+            stdscr.addstr(0, list_width, "│")
+            stdscr.addstr(0, list_width + 1, "Preview")
+
+        header = f"{'Age':<3} | {'Msgs':<4} | {'Ppl':<3} | {'Blob ID':<8} | {'Subject':<{subject_width}}"
+        stdscr.addstr(1, 0, header[:list_width-1])
+        if show_preview:
+            stdscr.addstr(1, list_width, "│")
+        stdscr.addstr(2, 0, "-" * min(list_width - 1, len(header)))
+        if show_preview:
+            stdscr.addstr(2, list_width, "├" + "─" * (preview_width - 1))
 
         visible_rows = h - 4
         if self.offset > self.cursor:
@@ -280,13 +339,35 @@ class ThreadSelectorTUI:
             line = f"{t['age_days']:<3} | {t['count']:<4} | {t['participants']:<3} | {t['blob']:<8} | {marker} {subject:<{subject_width}}"
 
             if i == self.cursor:
-                stdscr.addstr(row, 0, line[:w-1], curses.A_REVERSE)
+                stdscr.addstr(row, 0, line[:list_width-1], curses.A_REVERSE)
             else:
-                stdscr.addstr(row, 0, line[:w-1])
+                stdscr.addstr(row, 0, line[:list_width-1])
+
+        current_thread = self.threads[self.cursor] if self.threads else None
+        if show_preview and current_thread and preview_width > 10:
+            preview_lines = [
+                f"Subject: {current_thread['subject'][:preview_width-2]}",
+                f"Messages: {current_thread['count']}",
+                f"Participants: {current_thread['participants']}",
+                f"Last activity: {current_thread['last_activity']}",
+                f"Blob: {current_thread['blob']}",
+                f"Thread ID: {current_thread['thread_id'][:preview_width-2]}",
+                "",
+            ]
+
+            body_lines = self.fetch_email_body(current_thread['blob'])
+            for line in body_lines:
+                if len(preview_lines) >= h - 3:
+                    break
+                preview_lines.append(line[:preview_width-1])
+
+            for i, line in enumerate(preview_lines):
+                if 3 + i < h:
+                    stdscr.addstr(3 + i, list_width + 1, line[:preview_width - 1])
 
         if self.search_matches:
-            stdscr.addstr(h-2, 0, f"Match: {self.current_match_idx + 1}/{len(self.search_matches)}"[:w-1])
-        stdscr.addstr(h-1, 0, f"Selected: {sum(self.selected)}/{len(self.threads)}"[:w-1])
+            stdscr.addstr(h-2, 0, f"Match: {self.current_match_idx + 1}/{len(self.search_matches)}"[:list_width-1])
+        stdscr.addstr(h-1, 0, f"Selected: {sum(self.selected)}/{len(self.threads)}"[:list_width-1])
 
     def handle_input(self, key: int) -> Optional[List[str]]:
         """Handle key input. Returns list of selected blobs if quit, None otherwise."""
@@ -304,6 +385,8 @@ class ThreadSelectorTUI:
                 self.search_term = self.search_term[:-1]
                 self.search_matches = self.find_matches(self.search_term)
                 self.current_match_idx = 0 if self.search_matches else -1
+            elif key == ord('P'):
+                self.show_preview = not self.show_preview
             elif 32 <= key <= 126:
                 self.search_term += chr(key)
                 self.search_matches = self.find_matches(self.search_term)
@@ -320,6 +403,8 @@ class ThreadSelectorTUI:
                 return [self.threads[i]['blob'] for i in range(len(self.threads)) if self.selected[i]]
             elif key == ord('?'):
                 self.show_help_overlay = True
+            elif key == ord('P'):
+                self.show_preview = not self.show_preview
             elif key == ord('a'):
                 all_selected = all(self.selected)
                 self.selected = [not all_selected] * len(self.threads)
@@ -527,11 +612,11 @@ def main():
         print("No threads match the criteria.")
         return
 
-    tui = ThreadSelectorTUI(summarizable_threads)
+    repo_path = store.get_repo_path()
+    tui = ThreadSelectorTUI(summarizable_threads, repo_path)
     selected_blobs = tui.run()
 
     if selected_blobs:
-        repo_path = store.get_repo_path()
         processor = ThreadProcessor(repo_path)
         processor.process_selected_threads(summarizable_threads, selected_blobs)
 
