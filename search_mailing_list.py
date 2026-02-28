@@ -376,9 +376,17 @@ def main():
     selected_blobs = select_threads_curses(summarizable_threads)
 
     if selected_blobs:
-        print("\nSelected blob IDs:")
-        for blob in selected_blobs:
-            print(blob)
+        threads_dir = datetime.now().strftime("threads_%Y_%m_%d")
+        os.makedirs(threads_dir, exist_ok=True)
+
+        output_file = os.path.join(threads_dir, "selected_threads.txt")
+        selected_set = set(selected_blobs)
+        with open(output_file, 'w') as f:
+            for t in summarizable_threads:
+                if t['blob'] in selected_set:
+                    f.write(f"{t['blob']} | {t['subject']}\n")
+
+        print(f"\nSelected blob IDs saved to: {output_file}")
 
 if __name__ == "__main__":
     main()
