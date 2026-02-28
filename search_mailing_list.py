@@ -317,7 +317,7 @@ class ThreadSelectorTUI:
             preview_width = 0
             show_preview = False
 
-        fixed_width = 3 + 4 + 3 + 8 + 12 + 3
+        fixed_width = 3 + 4 + 3 + 12 + 2
         subject_width = max(20, list_width - fixed_width - 1)
 
         if self.searching:
@@ -329,7 +329,7 @@ class ThreadSelectorTUI:
             stdscr.addstr(0, list_width, "│")
             stdscr.addstr(0, list_width + 1, "Preview")
 
-        header = f"{'Age':<3} | {'Msgs':<4} | {'Ppl':<3} | {'Blob ID':<8} | {'Subject':<{subject_width}}"
+        header = f"{'Age':<3} | {'Msgs':<4} | {'Ppl':<3} | {'Subject':<{subject_width}}"
         stdscr.addstr(1, 0, header[:list_width-1])
         if show_preview:
             stdscr.addstr(1, list_width, "│")
@@ -351,7 +351,7 @@ class ThreadSelectorTUI:
             t = self.threads[i]
             marker = "[X]" if self.selected[i] else "[ ]"
             subject = t['subject'][:subject_width-3] + "..." if len(t['subject']) > subject_width else t['subject']
-            line = f"{t['age_days']:<3} | {t['count']:<4} | {t['participants']:<3} | {t['blob']:<8} | {marker} {subject:<{subject_width}}"
+            line = f"{t['age_days']:<3} | {t['count']:<4} | {t['participants']:<3} | {marker} {subject:<{subject_width}}"
 
             if i == self.cursor:
                 stdscr.addstr(row, 0, line[:list_width-1], curses.A_REVERSE)
@@ -365,7 +365,6 @@ class ThreadSelectorTUI:
                 f"Messages: {current_thread['count']}",
                 f"Participants: {current_thread['participants']}",
                 f"Last activity: {current_thread['last_activity']}",
-                f"Blob: {current_thread['blob']}",
                 f"Thread ID: {current_thread['thread_id'][:preview_width-2]}",
                 "",
             ]
