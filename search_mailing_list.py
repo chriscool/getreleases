@@ -290,9 +290,11 @@ class ThreadSelectorTUI:
             "Press any key to return...",
         ]
 
+        block_width = max(len(line) for line in lines)
+        start_x = max(0, (w - block_width) // 2)
         start_y = max(0, (h - len(lines)) // 2)
         for i, line in enumerate(lines):
-            stdscr.addstr(start_y + i, max(0, (w - len(line)) // 2), line)
+            stdscr.addstr(start_y + i, start_x, line)
 
         stdscr.getch()
         self.show_help_overlay = False
