@@ -172,7 +172,7 @@ class MailingListStore:
                     'last_activity': last_email_date.strftime("%Y-%m-%d"),
                     'participants': len(participants),
                     'age_days': age,
-                    'blob': msgs[0].get('blob', '')[:8],
+                    'blob': msgs[0].get('blob', ''),
                     'root_mid': msgs[0].get('m', '')
                 })
             else:
@@ -500,7 +500,7 @@ class ThreadProcessor:
             else:
                 subject = "unknown"
 
-            filename = f"{self.sanitize_filename(subject)}_{blob_id}.txt"
+            filename = f"{self.sanitize_filename(subject)}_{blob_id[:8]}.txt"
             output_path = os.path.join(threads_dir, filename)
 
             print(f"Fetching thread {blob_id}: {subject}", file=sys.stderr)
