@@ -6,9 +6,10 @@ import json
 import sys
 import shutil
 import os
+import re
 from datetime import datetime, timedelta
 from collections import defaultdict
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 try:
     import curses
@@ -16,6 +17,8 @@ except ImportError:
     print("Error: 'curses' module not found.", file=sys.stderr)
     print("On Windows, install it with: pip install windows-curses", file=sys.stderr)
     sys.exit(1)
+
+import git_ml_converter
 
 # --- Configuration ---
 # Thread size constraints
@@ -104,6 +107,27 @@ def get_latest_message_date(repo_path: str) -> Optional[str]:
 
     except (subprocess.CalledProcessError, json.JSONDecodeError, IndexError, KeyError):
         return None
+
+def get_repo_path() -> Optional[str]:
+    """Get the first local repo path from lei externals."""
+    try:
+        proc = subprocess.run(["lei", "ls-external"], capture_output=True, text=True)
+        externals = proc.stdout.strip()
+        if not externals:
+            return None
+        local_paths = [line.split()[0] for line in externals.splitlines() if line.strip().startswith('/')]
+        for path in local_paths:
+            if os.path.isdir(path):
+                return path
+    except subprocess.CalledProcessError:
+        pass
+    return None
+
+def sanitize_filename(name: str) -> str:
+    """Sanitize a string to be used as a filename."""
+    name = re.sub(r'[^\w\s-]', '', name)
+    name = re.sub(r'[-\s]+', '-', name)
+    return name.strip('-')[:50]
 
 def is_recent(date_str: str) -> bool:
     """Check if the given date string is less than 1 day old."""
@@ -387,6 +411,35 @@ def main():
                     f.write(f"{t['blob']} | {t['subject']}\n")
 
         print(f"\nSelected blob IDs saved to: {output_file}")
+
+        repo_path = get_repo_path()
+        if not repo_path:
+            print("Warning: Could not find a local repo path. Skipping thread conversion.")
+            return
+
+        print(f"Using repo: {repo_path}", file=sys.stderr)
+
+        for blob_id in selected_blobs:
+            for t in summarizable_threads:
+                if t['blob'] == blob_id:
+                    subject = t['subject']
+                    break
+            else:
+                subject = "unknown"
+
+            filename = f"{sanitize_filename(subject)}_{blob_id}.txt"
+            output_path = os.path.join(threads_dir, filename)
+
+            print(f"Fetching thread {blob_id}: {subject}", file=sys.stderr)
+            try:
+                messages = git_ml_converter.fetch_lei_thread(blob_id, repo_path)
+                git_ml_converter.convert_content_to_text(messages, blob_id, output_path, is_mbox=True)
+            except git_ml_converter.GitMLConverterError as e:
+                print(f"Error: Failed to fetch thread {blob_id}: {e}", file=sys.stderr)
+            except Exception as e:
+                print(f"Error fetching thread {blob_id}: {e}", file=sys.stderr)
+
+        print(f"\nThreads saved to: {threads_dir}/")
 
 if __name__ == "__main__":
     main()
