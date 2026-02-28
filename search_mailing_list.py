@@ -306,9 +306,9 @@ class ThreadSelectorTUI:
         subject_width = max(20, list_width - fixed_width - 1)
 
         if self.searching:
-            title = f"Search: {self.search_term} (Enter: done, Esc: cancel)"
+            title = f"Search: {self.search_term} (Enter: done, Esc: cancel, n/p next/prev, P preview)"
         else:
-            title = f"Select threads (/ search, n/p next/prev match, P preview, ? help, Space toggle, Q quit)"
+            title = f"Select threads (? help, / search, P preview, Space toggle, Q quit)"
         stdscr.addstr(0, 0, title[:list_width-1])
         if show_preview:
             stdscr.addstr(0, list_width, "│")
