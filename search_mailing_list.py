@@ -42,7 +42,7 @@ def run_live_command(cmd, cwd=None):
         process = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, cwd=cwd
         )
-        for line in process.stdout:
+        for line in process.stdout or []:
             print(line, end='', file=sys.stderr)
         process.wait()
         return process.returncode == 0
