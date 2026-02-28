@@ -419,7 +419,7 @@ class ThreadSelectorTUI:
             elif key == ord(' '):
                 self.selected[self.cursor] = not self.selected[self.cursor]
             elif key in (ord('q'), ord('Q')):
-                return [self.threads[i]['blob'] for i in range(len(self.threads)) if self.selected[i]]
+                return [self.threads[i]['root_mid'] for i in range(len(self.threads)) if self.selected[i]]
             elif key == ord('?'):
                 self.show_help_overlay = True
             elif key == ord('P'):
@@ -474,19 +474,19 @@ class ThreadProcessor:
         name = re.sub(r'[-\s]+', '-', name)
         return name.strip('-')[:50]
 
-    def process_selected_threads(self, threads: List[Dict[str, Any]], selected_blobs: List[str]) -> None:
+    def process_selected_threads(self, threads: List[Dict[str, Any]], selected_mids: List[str]) -> None:
         """Process selected threads: create directory and convert to text files."""
         threads_dir = datetime.now().strftime("threads_%Y_%m_%d")
         os.makedirs(threads_dir, exist_ok=True)
 
         output_file = os.path.join(threads_dir, "selected_threads.txt")
-        selected_set = set(selected_blobs)
+        selected_set = set(selected_mids)
         with open(output_file, 'w') as f:
             for t in threads:
-                if t['blob'] in selected_set:
-                    f.write(f"{t['blob']} | {t['subject']}\n")
+                if t['root_mid'] in selected_set:
+                    f.write(f"{t['root_mid']} | {t['subject']}\n")
 
-        print(f"\nSelected blob IDs saved to: {output_file}")
+        print(f"\nSelected thread IDs saved to: {output_file}")
 
         if not self.repo_path:
             print("Warning: Could not find a local repo path. Skipping thread conversion.")
@@ -494,25 +494,23 @@ class ThreadProcessor:
 
         print(f"Using repo: {self.repo_path}", file=sys.stderr)
 
-        for blob_id in selected_blobs:
-            for t in threads:
-                if t['blob'] == blob_id:
-                    subject = t['subject']
-                    break
-            else:
-                subject = "unknown"
+        thread_by_mid = {t['root_mid']: t for t in threads}
+        for mid in selected_mids:
+            t = thread_by_mid.get(mid)
+            subject = t['subject'] if t else "unknown"
+            blob = t['blob'][:8] if t else mid[:8]
 
-            filename = f"{self.sanitize_filename(subject)}_{blob_id[:8]}.txt"
+            filename = f"{self.sanitize_filename(subject)}_{blob}.txt"
             output_path = os.path.join(threads_dir, filename)
 
-            print(f"Fetching thread {blob_id}: {subject}", file=sys.stderr)
+            print(f"Fetching thread {mid}: {subject}", file=sys.stderr)
             try:
-                messages = git_ml_converter.fetch_lei_thread(blob_id, self.repo_path)
-                git_ml_converter.convert_content_to_text(messages, blob_id, output_path, is_mbox=True)
+                messages = git_ml_converter.fetch_lei_thread(mid, self.repo_path)
+                git_ml_converter.convert_content_to_text(messages, mid, output_path, is_mbox=True)
             except git_ml_converter.GitMLConverterError as e:
-                print(f"Error: Failed to fetch thread {blob_id}: {e}", file=sys.stderr)
+                print(f"Error: Failed to fetch thread {mid}: {e}", file=sys.stderr)
             except Exception as e:
-                print(f"Error fetching thread {blob_id}: {e}", file=sys.stderr)
+                print(f"Error fetching thread {mid}: {e}", file=sys.stderr)
 
         print(f"\nThreads saved to: {threads_dir}/")
 
@@ -640,11 +638,11 @@ def main():
 
     repo_path = store.get_repo_path()
     tui = ThreadSelectorTUI(summarizable_threads, repo_path)
-    selected_blobs = tui.run()
+    selected_mids = tui.run()
 
-    if selected_blobs:
+    if selected_mids:
         processor = ThreadProcessor(repo_path)
-        processor.process_selected_threads(summarizable_threads, selected_blobs)
+        processor.process_selected_threads(summarizable_threads, selected_mids)
 
 
 if __name__ == "__main__":
