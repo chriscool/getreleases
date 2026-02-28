@@ -19,6 +19,10 @@ from bs4 import BeautifulSoup
 from bs4.element import Tag
 from typing import Optional, List, Dict, Any
 
+class GitMLConverterError(Exception):
+    """Custom exception for git-ml-converter errors."""
+    pass
+
 # ==============================================================================
 # DATA FETCHING FUNCTIONS
 # ==============================================================================
@@ -33,8 +37,7 @@ def fetch_url_content(url: str) -> str:
         response.raise_for_status()
         return response.text
     except requests.exceptions.RequestException as e:
-        print(f"Error: Could not fetch URL. {e}", file=sys.stderr)
-        sys.exit(1)
+        raise GitMLConverterError(f"Could not fetch URL: {e}")
 
 def read_file_content(filepath: str) -> str:
     """Reads and returns the content from a local HTML file."""
@@ -43,16 +46,13 @@ def read_file_content(filepath: str) -> str:
         with open(filepath, 'r', encoding='utf-8') as f:
             return f.read()
     except FileNotFoundError:
-        print(f"Error: File not found at '{filepath}'", file=sys.stderr)
-        sys.exit(1)
+        raise GitMLConverterError(f"File not found at '{filepath}'")
     except UnicodeDecodeError:
-        # Fallback for different encoding
         try:
             with open(filepath, 'r', encoding='latin-1') as f:
                 return f.read()
         except Exception as e:
-            print(f"Error: Could not read file. {e}", file=sys.stderr)
-            sys.exit(1)
+            raise GitMLConverterError(f"Could not read file: {e}")
 
 def get_msgid_from_blob(blob_id: str, repo_path: Optional[str]) -> Optional[str]:
     """Uses git to read a blob and extract the Message-ID header."""
@@ -187,8 +187,7 @@ def fetch_lei_thread(input_id: str, repo_path: Optional[str] = None) -> List[Dic
         if re.match(r'^[a-f0-9]{40}$', clean_str, re.IGNORECASE):
             msg_id = get_msgid_from_blob(clean_str, repo_path)
             if not msg_id:
-                print("Failed to resolve Blob ID to Message-ID. Aborting.", file=sys.stderr)
-                sys.exit(1)
+                raise GitMLConverterError("Failed to resolve Blob ID to Message-ID.")
             # Quote the ID to handle special chars like '+' safely
             final_query = f'm:"<{msg_id}>"'
         else:
@@ -222,11 +221,10 @@ def fetch_lei_thread(input_id: str, repo_path: Optional[str] = None) -> List[Dic
 
         return parse_mbox_content(temp_path)
     except subprocess.CalledProcessError as e:
-        print(f"Error: lei command failed (Exit Code {e.returncode})", file=sys.stderr)
-        print(f"STDERR:\n{e.stderr}", file=sys.stderr)
+        error_msg = f"lei command failed (Exit Code {e.returncode}): {e.stderr}"
         if not repo_path:
-            print("Tip: Try providing the path to your git archive with --repo", file=sys.stderr)
-        sys.exit(1)
+            error_msg += ". Tip: Try providing the path to your git archive with --repo"
+        raise GitMLConverterError(error_msg)
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
@@ -476,9 +474,11 @@ def main() -> None:
     if content:
         convert_content_to_text(content, args.source, args.output, is_mbox)
     else:
-        print(f"Error: No content found for source '{args.source}'.", file=sys.stderr)
-        print("Check if the ID is correct.", file=sys.stderr)
-        sys.exit(1)
+        raise GitMLConverterError(f"No content found for source '{args.source}'. Check if the ID is correct.")
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except GitMLConverterError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
