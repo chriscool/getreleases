@@ -224,7 +224,7 @@ def analyze_threads(messages):
                 'last_activity': last_email_date.strftime("%Y-%m-%d"),
                 'participants': len(participants),
                 'age_days': age,
-                'blob': msgs[0].get('blob', ''),
+                'blob': msgs[0].get('blob', '')[:8],
                 'root_mid': msgs[0].get('m', '')
             })
         else:
@@ -247,16 +247,16 @@ def main():
     summarizable_threads.sort(key=lambda x: x['age_days'])
 
     term_width = os.get_terminal_size().columns or 130
-    fixed_width = 4 + 5 + 3 + 42 + 12
+    fixed_width = 3 + 4 + 3 + 8 + 12
     subject_width = max(20, term_width - fixed_width)
 
     print(f"\nFound {len(summarizable_threads)} threads worth summarizing:\n")
-    print(f"{'Age':<4} | {'Msgs':<5} | {'Ppl':<3} | {'Git Blob ID':<42} | {'Subject':<{subject_width}}")
+    print(f"{'Age':<3} | {'Msgs':<4} | {'Ppl':<3} | {'Blob ID':<8} | {'Subject':<{subject_width}}")
     print("-" * term_width)
 
     for t in summarizable_threads:
         subject = t['subject'][:subject_width-3] + "..." if len(t['subject']) > subject_width else t['subject']
-        print(f"{t['age_days']:<4} | {t['count']:<5} | {t['participants']:<3} | {t['blob']:<42} | {subject:<{subject_width}}")
+        print(f"{t['age_days']:<3} | {t['count']:<4} | {t['participants']:<3} | {t['blob']:<8} | {subject:<{subject_width}}")
 
 if __name__ == "__main__":
     main()
