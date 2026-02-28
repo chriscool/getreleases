@@ -325,6 +325,17 @@ def select_threads_curses(threads):
         cursor = 0
         offset = 0
 
+        search_term = ""
+        search_matches = []
+        current_match_idx = -1
+        searching = False
+
+        def find_matches(term):
+            if not term:
+                return []
+            term_lower = term.lower()
+            return [i for i, t in enumerate(threads) if term_lower in t['subject'].lower()]
+
         while True:
             stdscr.clear()
             h, w = stdscr.getmaxyx()
@@ -332,7 +343,10 @@ def select_threads_curses(threads):
             fixed_width = 3 + 4 + 3 + 8 + 12 + 3
             subject_width = max(20, w - fixed_width - 1)
 
-            title = f"Select threads (Space: toggle, Enter: done, Q: quit)"
+            if searching:
+                title = f"Search: {search_term} (Enter: done, Esc: cancel)"
+            else:
+                title = f"Select threads (/ search, n next, p prev, Space toggle, Enter done, Q quit)"
             stdscr.addstr(0, 0, title[:w-1])
             stdscr.addstr(1, 0, f"{'Age':<3} | {'Msgs':<4} | {'Ppl':<3} | {'Blob ID':<8} | {'Subject':<{subject_width}}")
             stdscr.addstr(2, 0, "-" * min(w - 1, fixed_width + subject_width))
@@ -358,23 +372,55 @@ def select_threads_curses(threads):
                 else:
                     stdscr.addstr(row, 0, line[:w-1])
 
+            if search_matches:
+                stdscr.addstr(h-2, 0, f"Match: {current_match_idx + 1}/{len(search_matches)}"[:w-1])
             stdscr.addstr(h-1, 0, f"Selected: {sum(selected)}/{len(threads)}"[:w-1])
 
             key = stdscr.getch()
 
-            if key in (curses.KEY_UP, ord('k')):
-                cursor = max(0, cursor - 1)
-            elif key in (curses.KEY_DOWN, ord('j')):
-                cursor = min(len(threads) - 1, cursor + 1)
-            elif key == ord(' '):
-                selected[cursor] = not selected[cursor]
-            elif key in (curses.KEY_ENTER, 10, 13):
-                break
-            elif key in (ord('q'), ord('Q')):
-                return []
-            elif key == ord('a'):
-                all_selected = all(selected)
-                selected = [not all_selected] * len(threads)
+            if searching:
+                if key in (curses.KEY_ENTER, 10, 13):
+                    searching = False
+                    if search_matches:
+                        cursor = search_matches[current_match_idx]
+                elif key == 27:  # Escape
+                    searching = False
+                    search_term = ""
+                    search_matches = []
+                    current_match_idx = -1
+                elif key in (curses.KEY_BACKSPACE, 127):
+                    search_term = search_term[:-1]
+                    search_matches = find_matches(search_term)
+                    current_match_idx = 0 if search_matches else -1
+                elif 32 <= key <= 126:
+                    search_term += chr(key)
+                    search_matches = find_matches(search_term)
+                    current_match_idx = 0 if search_matches else -1
+            else:
+                if key in (curses.KEY_UP, ord('k')):
+                    cursor = max(0, cursor - 1)
+                elif key in (curses.KEY_DOWN, ord('j')):
+                    cursor = min(len(threads) - 1, cursor + 1)
+                elif key == ord(' '):
+                    selected[cursor] = not selected[cursor]
+                elif key in (ord('q'), ord('Q')):
+                    return []
+                elif key == ord('a'):
+                    all_selected = all(selected)
+                    selected = [not all_selected] * len(threads)
+                elif key == ord('/'):
+                    searching = True
+                    search_term = ""
+                    search_matches = []
+                    current_match_idx = -1
+                elif key == ord('n'):
+                    if search_matches:
+                        current_match_idx = (current_match_idx + 1) % len(search_matches)
+                        cursor = search_matches[current_match_idx]
+                elif key == ord('p'):
+                    if search_matches:
+                        current_match_idx = (current_match_idx - 1) % len(search_matches)
+                        cursor = search_matches[current_match_idx]
 
         return [threads[i]['blob'] for i in range(len(threads)) if selected[i]]
 
