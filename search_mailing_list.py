@@ -200,10 +200,20 @@ class ThreadSelectorTUI:
         self.repo_path = repo_path
         self._preview_cache = {}
 
-    def fetch_email_body(self, blob_id: str) -> List[str]:
-        """Fetch the email body using git show."""
-        if blob_id in self._preview_cache:
-            return self._preview_cache[blob_id]
+    def _sanitize_for_curses(self, text: str) -> str:
+        """Remove non-printable characters for curses display."""
+        return ''.join(c if (32 <= ord(c) < 127 or c in '\n\r\t') else '?' for c in text)
+
+    def fetch_email_body(self, blob_id: str, max_lines: int = 20) -> List[str]:
+        """Fetch the email body using git show.
+
+        Args:
+            blob_id: The blob ID to fetch
+            max_lines: Maximum number of body lines to return
+        """
+        cache_key = f"{blob_id}:{max_lines}"
+        if cache_key in self._preview_cache:
+            return self._preview_cache[cache_key]
 
         if not self.repo_path:
             return []
@@ -230,8 +240,8 @@ class ThreadSelectorTUI:
                 elif line == '':
                     in_body = True
 
-            self._preview_cache[blob_id] = body_lines[:10]
-            return self._preview_cache[blob_id]
+            self._preview_cache[cache_key] = body_lines[:max_lines]
+            return self._preview_cache[cache_key]
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
             return []
 
@@ -318,8 +328,8 @@ class ThreadSelectorTUI:
         stdscr.addstr(1, 0, header[:list_width-1])
         if show_preview:
             stdscr.addstr(1, list_width, "│")
-        stdscr.addstr(2, 0, "-" * min(list_width - 1, len(header)))
-        if show_preview:
+        stdscr.addstr(2, 0, "-" * min(list_width - 1, w - 1))
+        if show_preview and list_width < w:
             stdscr.addstr(2, list_width, "├" + "─" * (preview_width - 1))
 
         visible_rows = h - 4
@@ -355,15 +365,18 @@ class ThreadSelectorTUI:
                 "",
             ]
 
-            body_lines = self.fetch_email_body(current_thread['blob'])
+            body_lines = self.fetch_email_body(current_thread['blob'], max(h - 14, 5))
             for line in body_lines:
                 if len(preview_lines) >= h - 3:
                     break
-                preview_lines.append(line[:preview_width-1])
+                preview_lines.append(self._sanitize_for_curses(line[:preview_width-1]))
 
             for i, line in enumerate(preview_lines):
-                if 3 + i < h:
-                    stdscr.addstr(3 + i, list_width + 1, line[:preview_width - 1])
+                try:
+                    if 3 + i < h:
+                        stdscr.addstr(3 + i, list_width + 1, line[:preview_width - 1])
+                except curses.error:
+                    pass
 
         if self.search_matches:
             stdscr.addstr(h-2, 0, f"Match: {self.current_match_idx + 1}/{len(self.search_matches)}"[:list_width-1])
