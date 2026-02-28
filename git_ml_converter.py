@@ -182,22 +182,23 @@ def fetch_lei_thread(input_id: str, repo_path: Optional[str] = None) -> List[Dic
         clean_str = input_id.strip()
         final_query = ""
 
-        # DETECT ID TYPE:
-        # 1. Git Blob ID (40 chars hex)
-        if re.match(r'^[a-f0-9]{40}$', clean_str, re.IGNORECASE):
+        # Detect whether input is a Message-ID or a full 40-char git blob SHA.
+        # Message-IDs always contain '@'; anything that isn't a full hex SHA is
+        # also treated as a Message-ID (e.g. abbreviated hashes).
+        if '@' in clean_str or not re.match(r'^[a-f0-9]{40}$', clean_str, re.IGNORECASE):
+            # Message-ID: strip optional 'm:' prefix and angle brackets, then
+            # quote to safely handle special characters like '+'.
+            if clean_str.lower().startswith("m:"):
+                clean_str = clean_str[2:]
+            raw_id = clean_str.strip('<> ')
+            final_query = f'm:"<{raw_id}>"'
+        else:
+            # Full 40-char blob SHA: resolve to a Message-ID via git-show first,
+            # then query by that ID.
             msg_id = get_msgid_from_blob(clean_str, repo_path)
             if not msg_id:
                 raise GitMLConverterError("Failed to resolve Blob ID to Message-ID.")
-            # Quote the ID to handle special chars like '+' safely
             final_query = f'm:"<{msg_id}>"'
-        else:
-            # 2. Message-ID
-            if clean_str.lower().startswith("m:"):
-                clean_str = clean_str[2:]
-
-            raw_id = clean_str.strip('<> ')
-            # Quote the ID to handle special chars like '+' safely
-            final_query = f'm:"<{raw_id}>"'
 
         print(f"Fetching thread via query: {final_query}")
 
