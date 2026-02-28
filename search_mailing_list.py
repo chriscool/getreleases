@@ -113,8 +113,7 @@ class MailingListStore:
                 return []
             return json.loads(result.stdout)
         except (subprocess.CalledProcessError, json.JSONDecodeError) as e:
-            print(f"Error running lei: {e}", file=sys.stderr)
-            sys.exit(1)
+            raise RuntimeError(f"Error running lei: {e}") from e
 
     def analyze_threads(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Groups messages by thread_id and filters based on user criteria."""
@@ -618,7 +617,11 @@ def main():
     check_and_manage_environment()
 
     store = MailingListStore()
-    messages = store.get_lei_results()
+    try:
+        messages = store.get_lei_results()
+    except RuntimeError as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)
 
     if not messages:
         print("No messages found in the search window.")
