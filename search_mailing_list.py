@@ -10,6 +10,13 @@ from datetime import datetime, timedelta
 from collections import defaultdict
 from typing import Optional
 
+try:
+    import curses
+except ImportError:
+    print("Error: 'curses' module not found.", file=sys.stderr)
+    print("On Windows, install it with: pip install windows-curses", file=sys.stderr)
+    sys.exit(1)
+
 # --- Configuration ---
 # Thread size constraints
 MIN_MSG_COUNT = 5
@@ -284,6 +291,68 @@ def analyze_threads(messages):
     print(f"Filtered out: {dropped_counts['count']} by size, {dropped_counts['age']} by date.", file=sys.stderr)
     return valid_threads
 
+def select_threads_curses(threads):
+    """Interactive thread selection using curses."""
+    def curses_main(stdscr):
+        curses.curs_set(0)
+        stdscr.clear()
+
+        selected = [False] * len(threads)
+        cursor = 0
+        offset = 0
+
+        while True:
+            stdscr.clear()
+            h, w = stdscr.getmaxyx()
+
+            title = f"Select threads (Space: toggle, Enter: done, Q: quit)"
+            stdscr.addstr(0, 0, title[:w-1])
+            stdscr.addstr(1, 0, f"{'Age':<3} | {'Msgs':<4} | {'Ppl':<3} | {'Blob ID':<8} | {'Subject':<40}")
+            stdscr.addstr(2, 0, "-" * min(w, 70))
+
+            visible_rows = h - 4
+            if offset > cursor:
+                offset = cursor
+            elif cursor >= offset + visible_rows:
+                offset = cursor - visible_rows + 1
+
+            for i in range(offset, min(len(threads), offset + visible_rows)):
+                row = i - offset + 3
+                if row >= h:
+                    break
+
+                t = threads[i]
+                marker = "[X]" if selected[i] else "[ ]"
+                subject = t['subject'][:40] + "..." if len(t['subject']) > 40 else t['subject']
+                line = f"{t['age_days']:<3} | {t['count']:<4} | {t['participants']:<3} | {t['blob']:<8} | {marker} {subject}"
+
+                if i == cursor:
+                    stdscr.addstr(row, 0, line[:w-1], curses.A_REVERSE)
+                else:
+                    stdscr.addstr(row, 0, line[:w-1])
+
+            stdscr.addstr(h-1, 0, f"Selected: {sum(selected)}/{len(threads)}"[:w-1])
+
+            key = stdscr.getch()
+
+            if key in (curses.KEY_UP, ord('k')):
+                cursor = max(0, cursor - 1)
+            elif key in (curses.KEY_DOWN, ord('j')):
+                cursor = min(len(threads) - 1, cursor + 1)
+            elif key == ord(' '):
+                selected[cursor] = not selected[cursor]
+            elif key in (curses.KEY_ENTER, 10, 13):
+                break
+            elif key in (ord('q'), ord('Q')):
+                return []
+            elif key == ord('a'):
+                all_selected = all(selected)
+                selected = [not all_selected] * len(threads)
+
+        return [threads[i]['blob'] for i in range(len(threads)) if selected[i]]
+
+    return curses.wrapper(curses_main)
+
 def main():
     check_and_manage_environment()
 
@@ -297,20 +366,16 @@ def main():
 
     summarizable_threads.sort(key=lambda x: x['age_days'])
 
-    try:
-        term_width = os.get_terminal_size().columns or 130
-    except OSError:
-        term_width = 130
-    fixed_width = 3 + 4 + 3 + 8 + 12
-    subject_width = max(20, term_width - fixed_width)
+    if not summarizable_threads:
+        print("No threads match the criteria.")
+        return
 
-    print(f"\nFound {len(summarizable_threads)} threads worth summarizing:\n")
-    print(f"{'Age':<3} | {'Msgs':<4} | {'Ppl':<3} | {'Blob ID':<8} | {'Subject':<{subject_width}}")
-    print("-" * term_width)
+    selected_blobs = select_threads_curses(summarizable_threads)
 
-    for t in summarizable_threads:
-        subject = t['subject'][:subject_width-3] + "..." if len(t['subject']) > subject_width else t['subject']
-        print(f"{t['age_days']:<3} | {t['count']:<4} | {t['participants']:<3} | {t['blob']:<8} | {subject:<{subject_width}}")
+    if selected_blobs:
+        print("\nSelected blob IDs:")
+        for blob in selected_blobs:
+            print(blob)
 
 if __name__ == "__main__":
     main()
