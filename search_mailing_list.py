@@ -244,17 +244,19 @@ def main():
 
     summarizable_threads = analyze_threads(messages)
 
-    # Sort by last activity (most recent first)
     summarizable_threads.sort(key=lambda x: x['age_days'])
 
+    term_width = os.get_terminal_size().columns or 130
+    fixed_width = 4 + 5 + 3 + 42 + 12
+    subject_width = max(20, term_width - fixed_width)
+
     print(f"\nFound {len(summarizable_threads)} threads worth summarizing:\n")
-    print(f"{'Age':<4} | {'Msgs':<5} | {'Ppl':<3} | {'Git Blob ID':<42} | {'Subject':<50}")
-    print("-" * 130)
+    print(f"{'Age':<4} | {'Msgs':<5} | {'Ppl':<3} | {'Git Blob ID':<42} | {'Subject':<{subject_width}}")
+    print("-" * term_width)
 
     for t in summarizable_threads:
-        # Truncate subject to 50 chars to keep the ID column aligned
-        subject = t['subject'][:47] + "..." if len(t['subject']) > 50 else t['subject']
-        print(f"{t['age_days']:<4} | {t['count']:<5} | {t['participants']:<3} | {t['blob']:<42} | {subject:<50}")
+        subject = t['subject'][:subject_width-3] + "..." if len(t['subject']) > subject_width else t['subject']
+        print(f"{t['age_days']:<4} | {t['count']:<5} | {t['participants']:<3} | {t['blob']:<42} | {subject:<{subject_width}}")
 
 if __name__ == "__main__":
     main()
