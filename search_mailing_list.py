@@ -248,13 +248,13 @@ def main():
     summarizable_threads.sort(key=lambda x: x['age_days'])
 
     print(f"\nFound {len(summarizable_threads)} threads worth summarizing:\n")
-    print(f"{'Age':<4} | {'Msgs':<5} | {'Ppl':<3} | {'Subject':<50} | {'Git Blob ID'}")
+    print(f"{'Age':<4} | {'Msgs':<5} | {'Ppl':<3} | {'Git Blob ID':<42} | {'Subject':<50}")
     print("-" * 130)
 
     for t in summarizable_threads:
         # Truncate subject to 50 chars to keep the ID column aligned
         subject = t['subject'][:47] + "..." if len(t['subject']) > 50 else t['subject']
-        print(f"{t['age_days']:<4} | {t['count']:<5} | {t['participants']:<3} | {subject:<50} | {t['blob']}")
+        print(f"{t['age_days']:<4} | {t['count']:<5} | {t['participants']:<3} | {t['blob']:<42} | {subject:<50}")
 
 if __name__ == "__main__":
     main()
