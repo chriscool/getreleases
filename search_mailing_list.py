@@ -8,6 +8,7 @@ import shutil
 import os
 from datetime import datetime, timedelta
 from collections import defaultdict
+from typing import Optional
 
 # --- Configuration ---
 # Thread size constraints
@@ -71,12 +72,62 @@ def setup_new_mirror():
     run_live_command(["lei", "up", target_path])
     print("\nSetup complete!", file=sys.stderr)
 
+def get_latest_message_date(repo_path: str) -> Optional[str]:
+    """Queries lei for the most recent message date in the given repository."""
+    cmd = [
+        "lei", "q", "--only", repo_path,
+        "-n", "1", "-s", "received", "dt:1.month.ago..", "-f", "json"
+    ]
+
+    try:
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        if not result.stdout.strip():
+            return None
+
+        data = json.loads(result.stdout)
+        if not data:
+            return None
+
+        latest_dt_str = data[0].get('dt')
+
+        if isinstance(latest_dt_str, list):
+            return latest_dt_str[0]
+
+        return latest_dt_str
+
+    except (subprocess.CalledProcessError, json.JSONDecodeError, IndexError, KeyError):
+        return None
+
+def is_recent(date_str: str) -> bool:
+    """Check if the given date string is less than 1 day old."""
+    if not date_str:
+        return False
+    try:
+        dt = parse_date(date_str)
+        if dt:
+            return (datetime.now() - dt).days < 1
+    except (ValueError, TypeError):
+        pass
+    return False
+
 def update_mirrors(externals):
     """Interactively updates existing local mirrors."""
     local_paths = [line.split()[0] for line in externals.splitlines() if line.strip().startswith('/')]
 
     if not local_paths: return
-    print(f"\nFound {len(local_paths)} local external(s): {', '.join(local_paths)}", file=sys.stderr)
+
+    latest_dates = {}
+    print(f"\nFound {len(local_paths)} local external(s):", file=sys.stderr)
+    for path in local_paths:
+        if os.path.isdir(path):
+            latest_date = get_latest_message_date(path)
+            latest_dates[path] = latest_date
+            print(f"  {path} (latest: {latest_date or 'unknown'})", file=sys.stderr)
+
+    all_recent = all(is_recent(date) for date in latest_dates.values() if date)
+    if all_recent:
+        print("All repos are up-to-date (latest message less than 1 day old).", file=sys.stderr)
+        return
 
     if ask_user("Fetch new emails and update index? [y/N]: ").lower() != 'y': return
 
