@@ -283,7 +283,7 @@ class ThreadSelectorTUI:
             "  Escape      - Cancel search",
             "",
             "Other:",
-            "  P           - Toggle preview window",
+            "  Ctrl+P      - Toggle preview window",
             "  ?           - Show this help",
             "  Q           - Quit and return selected threads",
             "",
@@ -323,9 +323,9 @@ class ThreadSelectorTUI:
         subject_width = max(20, list_width - fixed_width - 1)
 
         if self.searching:
-            title = f"Search: {self.search_term} (Enter: done, Esc: cancel, n/p next/prev, P preview)"
+            title = f"Search: {self.search_term} (Enter: done, Esc: cancel, n/p next/prev, Ctrl+P preview)"
         else:
-            title = f"Select threads (? help, / search, P preview, Space toggle, Q quit)"
+            title = f"Select threads (? help, / search, Ctrl+P preview, Space toggle, Q quit)"
         stdscr.addstr(0, 0, title[:list_width-1])
         if show_preview:
             stdscr.addstr(0, list_width, "│")
@@ -390,6 +390,9 @@ class ThreadSelectorTUI:
 
     def handle_input(self, key: int) -> Optional[List[str]]:
         """Handle key input. Returns list of selected blobs if quit, None otherwise."""
+        if key == 16:  # Ctrl+P
+            self.show_preview = not self.show_preview
+            return None
         if self.searching:
             if key in (curses.KEY_ENTER, 10, 13):
                 self.searching = False
@@ -404,8 +407,6 @@ class ThreadSelectorTUI:
                 self.search_term = self.search_term[:-1]
                 self.search_matches = self.find_matches(self.search_term)
                 self.current_match_idx = 0 if self.search_matches else -1
-            elif key == ord('P'):
-                self.show_preview = not self.show_preview
             elif 32 <= key <= 126:
                 self.search_term += chr(key)
                 self.search_matches = self.find_matches(self.search_term)
@@ -422,8 +423,6 @@ class ThreadSelectorTUI:
                 return [self.threads[i]['root_mid'] for i in range(len(self.threads)) if self.selected[i]]
             elif key == ord('?'):
                 self.show_help_overlay = True
-            elif key == ord('P'):
-                self.show_preview = not self.show_preview
             elif key == ord('a'):
                 all_selected = all(self.selected)
                 self.selected = [not all_selected] * len(self.threads)
