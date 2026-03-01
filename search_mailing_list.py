@@ -49,6 +49,18 @@ def compute_edition(date: datetime) -> int:
     return (ref.year - 2015) * 12 + ref.month - 2
 
 
+def get_threads_dir(edition: int) -> str:
+    """Return the path of the threads directory for the given edition."""
+    return f"threads_{edition}"
+
+
+def find_or_create_threads_dir(edition: int) -> str:
+    """Return the threads directory for the given edition, creating it if needed."""
+    threads_dir = get_threads_dir(edition)
+    os.makedirs(threads_dir, exist_ok=True)
+    return threads_dir
+
+
 class MailingListStore:
     """Encapsulates all interactions with lei and the local git repository."""
 
@@ -480,10 +492,11 @@ class ThreadSelectorTUI:
 
 
 class ThreadProcessor:
-    """Handles post-selection workflow: creating directories and converting threads."""
+    """Handles post-selection workflow: converting threads and saving to a directory."""
 
-    def __init__(self, repo_path: Optional[str]):
+    def __init__(self, repo_path: Optional[str], threads_dir: str):
         self.repo_path = repo_path
+        self.threads_dir = threads_dir
 
     @staticmethod
     def sanitize_filename(name: str) -> str:
@@ -493,18 +506,7 @@ class ThreadProcessor:
         return name.strip('-')[:50]
 
     def process_selected_threads(self, threads: List[Dict[str, Any]], selected_mids: List[str]) -> None:
-        """Process selected threads: create directory and convert to text files."""
-        threads_dir = datetime.now().strftime("threads_%Y_%m_%d")
-        os.makedirs(threads_dir, exist_ok=True)
-
-        output_file = os.path.join(threads_dir, "selected_threads.txt")
-        selected_set = set(selected_mids)
-        with open(output_file, 'w') as f:
-            for t in threads:
-                if t['root_mid'] in selected_set:
-                    f.write(f"{t['root_mid']} | {t['subject']}\n")
-
-        print(f"\nSelected thread IDs saved to: {output_file}")
+        """Process selected threads: convert to text files in the edition directory."""
 
         if not self.repo_path:
             print("Warning: Could not find a local repo path. Skipping thread conversion.")
@@ -519,7 +521,7 @@ class ThreadProcessor:
             blob = t['blob'][:8] if t else mid[:8]
 
             filename = f"{self.sanitize_filename(subject)}_{blob}.txt"
-            output_path = os.path.join(threads_dir, filename)
+            output_path = os.path.join(self.threads_dir, filename)
 
             print(f"Fetching thread {mid}: {subject}", file=sys.stderr)
             try:
@@ -530,7 +532,7 @@ class ThreadProcessor:
             except Exception as e:
                 print(f"Error fetching thread {mid}: {e}", file=sys.stderr)
 
-        print(f"\nThreads saved to: {threads_dir}/")
+        print(f"\nThreads saved to: {self.threads_dir}/")
 
 
 # --- Helper functions ---
@@ -666,7 +668,8 @@ def main():
     selected_mids = tui.run()
 
     if selected_mids:
-        processor = ThreadProcessor(repo_path)
+        threads_dir = find_or_create_threads_dir(edition)
+        processor = ThreadProcessor(repo_path, threads_dir)
         processor.process_selected_threads(summarizable_threads, selected_mids)
 
 
