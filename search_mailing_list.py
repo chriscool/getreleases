@@ -310,7 +310,8 @@ class MailingListStore:
 class ThreadSelectorTUI:
     """Manages the curses-based thread selection interface."""
 
-    def __init__(self, threads: List[Dict[str, Any]], repo_path: Optional[str] = None):
+    def __init__(self, threads: List[Dict[str, Any]], repo_path: Optional[str] = None,
+                 edition: Optional[int] = None, done_mids: Optional[set] = None):
         self.threads = threads
         self.selected = [False] * len(threads)
         self.cursor = 0
@@ -322,6 +323,8 @@ class ThreadSelectorTUI:
         self.show_help_overlay = False
         self.show_preview = True
         self.repo_path = repo_path
+        self.edition = edition
+        self.done_mids = done_mids or set()
         self._preview_cache = {}
 
     def _sanitize_for_curses(self, text: str) -> str:
@@ -447,10 +450,11 @@ class ThreadSelectorTUI:
         fixed_width = 3 + 4 + 3 + 12 + 2
         subject_width = max(20, list_width - fixed_width - 1)
 
+        edition_prefix = f"Edition {self.edition} | " if self.edition is not None else ""
         if self.searching:
-            title = f"Search: {self.search_term} (Enter: done, Esc: cancel, n/p next/prev, Ctrl+P preview)"
+            title = f"{edition_prefix}Search: {self.search_term} (Enter: done, Esc: cancel, n/p next/prev, Ctrl+P preview)"
         else:
-            title = f"Select threads (? help, / search, Ctrl+P preview, Space toggle, Q quit)"
+            title = f"{edition_prefix}Select threads (? help, / search, Ctrl+P preview, Space toggle, Q quit)"
         stdscr.addstr(0, 0, title[:list_width-1])
         if show_preview:
             stdscr.addstr(0, list_width, "│")
@@ -476,7 +480,12 @@ class ThreadSelectorTUI:
                 break
 
             t = self.threads[i]
-            marker = "[X]" if self.selected[i] else "[ ]"
+            if t['root_mid'] in self.done_mids:
+                marker = "[D]"
+            elif self.selected[i]:
+                marker = "[X]"
+            else:
+                marker = "[ ]"
             subject = t['subject'][:subject_width-3] + "..." if len(t['subject']) > subject_width else t['subject']
             line = f"{t['age_days']:<3} | {t['count']:<4} | {t['participants']:<3} | {marker} {subject:<{subject_width}}"
 
