@@ -602,12 +602,15 @@ class ThreadSelectorTUI:
 class ThreadProcessor:
     """Handles post-selection workflow: converting threads and saving to a directory."""
 
-    def __init__(self, repo_path: Optional[str], threads_dir: str):
+    def __init__(self, repo_path: Optional[str], threads_dir: str,
+                 edition: int, existing_index: Optional[Dict[str, Any]] = None):
         self.repo_path = repo_path
         self.threads_dir = threads_dir
+        self.edition = edition
+        self.existing_index = existing_index
 
     def process_selected_threads(self, threads: List[Dict[str, Any]], selected_mids: List[str]) -> None:
-        """Process selected threads: convert to text files in the edition directory."""
+        """Process selected threads: convert to text files and update index.md."""
 
         if not self.repo_path:
             print("Warning: Could not find a local repo path. Skipping thread conversion.")
@@ -616,6 +619,8 @@ class ThreadProcessor:
         print(f"Using repo: {self.repo_path}", file=sys.stderr)
 
         thread_by_mid = {t['root_mid']: t for t in threads}
+        processed_threads = []
+
         for mid in selected_mids:
             t = thread_by_mid.get(mid)
             subject = t['subject'] if t else "unknown"
@@ -628,10 +633,16 @@ class ThreadProcessor:
             try:
                 messages = git_ml_converter.fetch_lei_thread(mid, self.repo_path)
                 git_ml_converter.convert_content_to_text(messages, mid, output_path, is_mbox=True)
+                if t:
+                    processed_threads.append(t)
             except git_ml_converter.GitMLConverterError as e:
                 print(f"Error: Failed to fetch thread {mid}: {e}", file=sys.stderr)
             except Exception as e:
                 print(f"Error fetching thread {mid}: {e}", file=sys.stderr)
+
+        if processed_threads:
+            save_index(self.threads_dir, self.edition, processed_threads, self.existing_index)
+            print(f"Index updated: {os.path.join(self.threads_dir, INDEX_FILENAME)}")
 
         print(f"\nThreads saved to: {self.threads_dir}/")
 
@@ -770,7 +781,7 @@ def main():
 
     if selected_mids:
         threads_dir = find_or_create_threads_dir(edition)
-        processor = ThreadProcessor(repo_path, threads_dir)
+        processor = ThreadProcessor(repo_path, threads_dir, edition)
         processor.process_selected_threads(summarizable_threads, selected_mids)
 
 
