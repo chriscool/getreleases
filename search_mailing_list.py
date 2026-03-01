@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import argparse
 import subprocess
 import json
 import sys
@@ -28,6 +29,24 @@ MIN_AGE_DAYS = 21
 MAX_AGE_DAYS = 90
 GIT_ML_URL = "https://lore.kernel.org/git/"
 DEFAULT_CLONE_PATH = os.path.expanduser("~/git/git-mailing-list-public-inbox")
+
+
+def compute_edition(date: datetime) -> int:
+    """Compute the Git Rev News edition number being prepared for a given date.
+
+    Editions are monthly. Edition 1 was published March 2015.
+    Each edition covers two months and is published at the end of the second.
+
+    If today is strictly before the 10th of the month, we are still working
+    on the edition whose second covered month is the previous month.
+    Otherwise, we are working on the edition whose second covered month is
+    the current month.
+    """
+    if date.day < 10:
+        ref = (date.replace(day=1) - timedelta(days=1))
+    else:
+        ref = date
+    return (ref.year - 2015) * 12 + ref.month - 2
 
 
 class MailingListStore:
@@ -615,6 +634,13 @@ def check_and_manage_environment():
 
 
 def main():
+    parser = argparse.ArgumentParser(description='Browse and export Git mailing list threads.')
+    parser.add_argument('--edition', type=int, default=None,
+                        help='Override the edition number (default: auto-detected from current date).')
+    args = parser.parse_args()
+
+    edition = args.edition if args.edition is not None else compute_edition(datetime.now())
+
     check_and_manage_environment()
 
     store = MailingListStore()
