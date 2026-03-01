@@ -775,13 +775,16 @@ def main():
         print("No threads match the criteria.")
         return
 
+    threads_dir = find_or_create_threads_dir(edition)
+    existing_index = load_index(threads_dir)
+
     repo_path = store.get_repo_path()
-    tui = ThreadSelectorTUI(summarizable_threads, repo_path)
+    tui = ThreadSelectorTUI(summarizable_threads, repo_path,
+                            edition=edition, done_mids=existing_index['done_mids'])
     selected_mids = tui.run()
 
     if selected_mids:
-        threads_dir = find_or_create_threads_dir(edition)
-        processor = ThreadProcessor(repo_path, threads_dir, edition)
+        processor = ThreadProcessor(repo_path, threads_dir, edition, existing_index)
         processor.process_selected_threads(summarizable_threads, selected_mids)
 
 
