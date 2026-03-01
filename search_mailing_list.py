@@ -61,6 +61,100 @@ def find_or_create_threads_dir(edition: int) -> str:
     return threads_dir
 
 
+def sanitize_filename(name: str) -> str:
+    """Sanitize a string to be used as a filename."""
+    name = re.sub(r'[^\w\s-]', '', name)
+    name = re.sub(r'[-\s]+', '-', name)
+    return name.strip('-')[:50]
+
+
+INDEX_FILENAME = "index.md"
+
+
+def load_index(threads_dir: str) -> Dict[str, Any]:
+    """Load the index.md from a threads directory.
+
+    Returns a dict with:
+      - 'edition': int
+      - 'created': str (YYYY-MM-DD)
+      - 'done_mids': set of Message-IDs already recorded
+    """
+    index_path = os.path.join(threads_dir, INDEX_FILENAME)
+    result: Dict[str, Any] = {'edition': None, 'created': None, 'done_mids': set()}
+
+    if not os.path.exists(index_path):
+        return result
+
+    with open(index_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    fm_match = re.search(r'^---\n(.*?)\n---', content, re.DOTALL)
+    if fm_match:
+        fm = fm_match.group(1)
+        m = re.search(r'^edition:\s*(\d+)', fm, re.MULTILINE)
+        if m:
+            result['edition'] = int(m.group(1))
+        m = re.search(r'^created:\s*(\S+)', fm, re.MULTILINE)
+        if m:
+            result['created'] = m.group(1)
+
+    for m in re.finditer(r'^\s+-\s+Message-ID:\s+`([^`]+)`', content, re.MULTILINE):
+        result['done_mids'].add(m.group(1))
+
+    return result
+
+
+def save_index(threads_dir: str, edition: int, threads: List[Dict[str, Any]],
+               existing: Optional[Dict[str, Any]] = None) -> None:
+    """Write or update index.md in the given threads directory.
+
+    New threads are appended; threads already in the existing index are kept.
+    """
+    index_path = os.path.join(threads_dir, INDEX_FILENAME)
+    created = existing.get('created') if existing else None
+    if not created:
+        created = datetime.now().strftime('%Y-%m-%d')
+
+    already_done = existing.get('done_mids', set()) if existing else set()
+    new_threads = [t for t in threads if t['root_mid'] not in already_done]
+
+    existing_body = ""
+    if os.path.exists(index_path):
+        with open(index_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        fm_end = content.find('\n---\n', content.find('---\n'))
+        if fm_end != -1:
+            after_fm = content[fm_end + 5:]
+            lines = after_fm.splitlines(keepends=True)
+            existing_body = ''.join(
+                l for l in lines if not l.startswith('# Git Rev News')
+            )
+
+    new_entries = ""
+    for t in new_threads:
+        blob = t.get('blob', '')[:8]
+        filename = f"{sanitize_filename(t['subject'])}_{blob}.txt"
+        mid = t['root_mid']
+        subject = t['subject']
+        new_entries += (
+            f"\n- **{subject}**\n"
+            f"  - File: `{filename}`\n"
+            f"  - Message-ID: `{mid}`\n"
+            f"  - Notes:\n"
+        )
+
+    if not existing_body.strip():
+        body = f"## Selected Threads\n{new_entries}"
+    else:
+        body = existing_body.strip() + "\n" + new_entries
+
+    front_matter = f"---\nedition: {edition}\ncreated: {created}\n---\n"
+    header = f"\n# Git Rev News Edition {edition} - Raw Materials\n\n"
+
+    with open(index_path, 'w', encoding='utf-8') as f:
+        f.write(front_matter + header + body + "\n")
+
+
 class MailingListStore:
     """Encapsulates all interactions with lei and the local git repository."""
 
@@ -498,13 +592,6 @@ class ThreadProcessor:
         self.repo_path = repo_path
         self.threads_dir = threads_dir
 
-    @staticmethod
-    def sanitize_filename(name: str) -> str:
-        """Sanitize a string to be used as a filename."""
-        name = re.sub(r'[^\w\s-]', '', name)
-        name = re.sub(r'[-\s]+', '-', name)
-        return name.strip('-')[:50]
-
     def process_selected_threads(self, threads: List[Dict[str, Any]], selected_mids: List[str]) -> None:
         """Process selected threads: convert to text files in the edition directory."""
 
@@ -520,7 +607,7 @@ class ThreadProcessor:
             subject = t['subject'] if t else "unknown"
             blob = t['blob'][:8] if t else mid[:8]
 
-            filename = f"{self.sanitize_filename(subject)}_{blob}.txt"
+            filename = f"{sanitize_filename(subject)}_{blob}.txt"
             output_path = os.path.join(self.threads_dir, filename)
 
             print(f"Fetching thread {mid}: {subject}", file=sys.stderr)
