@@ -466,6 +466,7 @@ class ThreadWorkspace:
         self.thread_cursor = 0
         self.thread_scroll_offset = 0
         self.message_scroll_offset = 0
+        self.cancel_preview_search()
 
     def move_thread_cursor(self, delta: int, msg_count: int) -> None:
         """Move the message cursor within the thread overview by delta."""
@@ -573,6 +574,7 @@ class ThreadSelectorTUI:
         self.preview_mode = 'THREAD'  # 'MESSAGE' or 'THREAD'
         self.view_mode = 'SPLIT'  # 'SPLIT' or 'FULLSCREEN'
         self.focus = 'THREAD_LIST'  # 'THREAD_LIST' or 'PREVIEW'
+        self._last_preview_plain_lines: List[str] = []
 
     def _sanitize_for_curses(self, text: str) -> str:
         """Remove non-printable and control characters for curses display."""
@@ -594,6 +596,7 @@ class ThreadSelectorTUI:
         else:
             self.show_preview = True
             self.preview_mode = mode
+        self.ws.cancel_preview_search()
 
     def show_help(self, stdscr):
         """Display help screen overlay."""
@@ -621,6 +624,9 @@ class ThreadSelectorTUI:
             "Preview Pane (when preview is focused or full-screen):",
             "  k / Up      - Scroll up (message body) or move up (thread overview)",
             "  j / Down    - Scroll down (message body) or move down (thread overview)",
+            "  /           - Search within preview (subjects or message body)",
+            "  n / p       - Next / previous preview search match",
+            "  Escape      - Cancel preview search (or return focus to thread list)",
             "  Ctrl+P      - View selected message (when in thread overview)",
             "",
             "Preview Modes:",
@@ -682,9 +688,23 @@ class ThreadSelectorTUI:
         offset = self.ws.message_scroll_offset
         visible = body_lines[offset:offset + available]
 
+        matches = set(self.ws.preview_search_matches)
+        current = (self.ws.preview_search_matches[self.ws.preview_current_match]
+                   if self.ws.preview_current_match >= 0 else -1)
+        result_body: List[Tuple[str, int]] = []
+        for local_idx, line in enumerate(visible):
+            abs_idx = offset + local_idx
+            if abs_idx == current:
+                attr = curses.A_BOLD | curses.A_REVERSE
+            elif abs_idx in matches:
+                attr = curses.A_BOLD
+            else:
+                attr = 0
+            result_body.append((line, attr))
+
         more_above = offset > 0
         more_below = offset + available < len(body_lines)
-        return header + [(line, 0) for line in visible], more_above, more_below
+        return header + result_body, more_above, more_below
 
     def _build_thread_overview(self, messages: List[Dict[str, Any]],
                                preview_width: int,
@@ -702,6 +722,10 @@ class ThreadSelectorTUI:
         header = f"Thread overview: {len(messages)} messages"
         lines: List[Tuple[str, int]] = [(header, 0), ("", 0)]
 
+        matches = set(self.ws.preview_search_matches)
+        current = (self.ws.preview_search_matches[self.ws.preview_current_match]
+                   if self.ws.preview_current_match >= 0 else -1)
+
         for idx in range(offset, min(len(messages), offset + available)):
             msg = messages[idx]
             subject = _decode_header(msg.get('subject', '(No Subject)').strip())
@@ -714,22 +738,57 @@ class ThreadSelectorTUI:
 
             cursor_marker = '►' if idx == self.ws.thread_cursor else ' '
             entry = f"{cursor_marker} {date_fmt} {indent}{subject} {sender}"
-            attr = curses.A_REVERSE if idx == self.ws.thread_cursor else 0
+            if idx == current:
+                attr = curses.A_BOLD | curses.A_REVERSE
+            elif idx in matches:
+                attr = curses.A_BOLD
+            elif idx == self.ws.thread_cursor:
+                attr = curses.A_REVERSE
+            else:
+                attr = 0
             lines.append((self._sanitize_for_curses(entry[:preview_width-1]), attr))
 
         more_above = offset > 0
         more_below = offset + available < len(messages)
         return lines, more_above, more_below
 
+    def _plain_body_lines(self, thread: Dict[str, Any]) -> List[str]:
+        """Return all plain-text body lines for the currently selected message."""
+        messages = self.ws.fetch_thread_overview(thread['root_mid'])
+        if messages:
+            msg = messages[min(self.ws.thread_cursor, len(messages) - 1)]
+            return [self._sanitize_for_curses(l) for l in msg.get('body', [])]
+        return [self._sanitize_for_curses(l)
+                for l in self.ws.fetch_email_body(thread['blob'], 10000)]
+
+    def _plain_overview_lines(self, messages: List[Dict[str, Any]]) -> List[str]:
+        """Return all plain-text entry strings for the thread overview."""
+        result = []
+        for msg in messages:
+            subject = _decode_header(msg.get('subject', '(No Subject)').strip())
+            sender = _decode_header(msg.get('from', '').strip())
+            date_fmt = _parse_overview_date(msg.get('date', ''))
+            refs = msg.get('references', '') or ''
+            depth = len(refs.split()) if refs.strip() else 0
+            indent = '` ' * depth
+            result.append(self._sanitize_for_curses(f"  {date_fmt} {indent}{subject} {sender}"))
+        return result
+
     def _get_preview_lines(self, thread: Dict[str, Any], preview_width: int,
                            h: int) -> Tuple[List[Tuple[str, int]], bool, bool]:
-        """Return (lines, more_above, more_below) for the preview pane."""
+        """Return (lines, more_above, more_below) for the preview pane.
+
+        Also updates _last_preview_plain_lines for use by preview search input handling.
+        """
         if self.preview_mode == 'MESSAGE':
+            self._last_preview_plain_lines = self._plain_body_lines(thread)
             return self._build_body_preview(thread, preview_width, h)
 
         messages = self.ws.fetch_thread_overview(thread['root_mid'])
         if messages is None:
+            self._last_preview_plain_lines = []
             return [("Loading...", 0)], False, False
+        self._last_preview_plain_lines = self._plain_overview_lines(messages)
         return self._build_thread_overview(messages, preview_width, h)
 
     def _render_fullscreen(self, stdscr, h: int, w: int) -> None:
@@ -740,7 +799,12 @@ class ThreadSelectorTUI:
 
         edition_prefix = f"Edition {self.ws.edition} | " if self.ws.edition is not None else ""
         mode_name = "Thread Overview" if self.preview_mode == 'THREAD' else "Message Preview"
-        title = f"{edition_prefix}{mode_name} - Full Screen (Ctrl+F: exit, Ctrl+P/T: switch mode)"
+        if self.ws.preview_searching:
+            n = len(self.ws.preview_search_matches)
+            idx = self.ws.preview_current_match + 1 if n else 0
+            title = f"{edition_prefix}{mode_name} - Search: {self.ws.preview_search_term}  [{idx}/{n}]  n/p: match  Esc: cancel"
+        else:
+            title = f"{edition_prefix}{mode_name} - Full Screen (Ctrl+F: exit, Ctrl+P/T: switch, /: search)"
         stdscr.addstr(0, 0, title[:w-1], curses.A_BOLD)
 
         subject_line = f"Thread: {current_thread['subject']}"
@@ -811,8 +875,13 @@ class ThreadSelectorTUI:
             stdscr.addstr(0, list_width, "│")
             preview_focus = self.focus == 'PREVIEW'
             preview_marker = "►" if preview_focus else " "
-            mode_label = "Thread overview (Ctrl+T/P)" if self.preview_mode == 'THREAD' else "Message preview (Ctrl+P/T)"
-            preview_label = f"{preview_marker} {mode_label} (Tab: switch focus)"
+            if self.ws.preview_searching:
+                n = len(self.ws.preview_search_matches)
+                idx = self.ws.preview_current_match + 1 if n else 0
+                preview_label = f"{preview_marker} Search: {self.ws.preview_search_term}  [{idx}/{n}]  n/p: match  Esc: cancel"
+            else:
+                mode_label = "Thread overview (Ctrl+T/P)" if self.preview_mode == 'THREAD' else "Message preview (Ctrl+P/T)"
+                preview_label = f"{preview_marker} {mode_label} (Tab: focus, /: search)"
             preview_attr = curses.A_BOLD if preview_focus else 0
             stdscr.addstr(0, list_width + 1, preview_label[:preview_width - 1], preview_attr)
 
@@ -928,8 +997,25 @@ class ThreadSelectorTUI:
             self.ws.prev_match()
         return None
 
+    def _handle_input_preview_search(self, key: int) -> None:
+        """Handle key input while in preview search mode."""
+        if key in (curses.KEY_ENTER, 10, 13):
+            self.ws.confirm_preview_search()
+        elif key == 27:  # Escape
+            self.ws.cancel_preview_search()
+        elif key in (curses.KEY_BACKSPACE, 127):
+            self.ws.update_preview_search(self.ws.preview_search_term[:-1],
+                                          self._last_preview_plain_lines)
+        elif 32 <= key <= 126:
+            self.ws.update_preview_search(self.ws.preview_search_term + chr(key),
+                                          self._last_preview_plain_lines)
+
     def _handle_input_preview(self, key: int) -> Optional[List[str]]:
         """Handle key input when focus is on the preview pane."""
+        if self.ws.preview_searching:
+            self._handle_input_preview_search(key)
+            return None
+
         messages = self.ws.fetch_thread_overview(self.ws.threads[self.ws.cursor]['root_mid'])
         msg_count = len(messages) if messages else 0
 
@@ -944,7 +1030,13 @@ class ThreadSelectorTUI:
             elif key in (curses.KEY_DOWN, ord('j')):
                 self.ws.scroll_message(+1)
 
-        if key == 9:  # Tab - return focus to thread list (split-pane only)
+        if key == ord('/'):
+            self.ws.start_preview_search()
+        elif key == ord('n'):
+            self.ws.next_preview_match()
+        elif key == ord('p'):
+            self.ws.prev_preview_match()
+        elif key == 9:  # Tab - return focus to thread list (split-pane only)
             self.focus = 'THREAD_LIST'
         elif key == 27:  # Escape
             if self.view_mode == 'FULLSCREEN':
