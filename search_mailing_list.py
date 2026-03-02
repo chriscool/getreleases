@@ -11,6 +11,7 @@ import re
 import threading
 from datetime import datetime, timedelta
 from collections import defaultdict
+from email.header import decode_header, make_header
 from typing import Optional, List, Dict, Any
 
 try:
@@ -332,8 +333,8 @@ class ThreadSelectorTUI:
         self._overview_loading = set()
 
     def _sanitize_for_curses(self, text: str) -> str:
-        """Remove non-printable characters for curses display."""
-        return ''.join(c if (32 <= ord(c) < 127 or c in '\n\r\t') else '?' for c in text)
+        """Remove non-printable and control characters for curses display."""
+        return ''.join(c if 32 <= ord(c) < 127 else '?' for c in text)
 
     def fetch_email_body(self, blob_id: str, max_lines: int = 20) -> List[str]:
         """Fetch the email body using git show.
@@ -482,24 +483,36 @@ class ThreadSelectorTUI:
         return lines
 
     @staticmethod
+    def _decode_header(value: str) -> str:
+        """Decode an RFC 2047 encoded header value to a plain string."""
+        try:
+            return str(make_header(decode_header(value)))
+        except Exception:
+            return value
+
+    @staticmethod
     def _parse_overview_date(date_str: str) -> str:
         """Parse an RFC 2822 date string into YYYY-MM-DD, or return blanks on failure."""
-        for fmt in ('%a, %d %b %Y %H:%M:%S %z', '%d %b %Y %H:%M:%S %z',
-                    '%a, %d %b %Y %H:%M:%S', '%d %b %Y %H:%M:%S'):
+        from email.utils import parsedate
+        date_str = date_str.strip()
+        if not date_str:
+            return '          '
+        parsed = parsedate(date_str)
+        if parsed:
             try:
-                return datetime.strptime(date_str.strip(), fmt).strftime('%Y-%m-%d')
-            except ValueError:
-                continue
+                return datetime(*parsed[:3]).strftime('%Y-%m-%d')
+            except Exception:
+                pass
         return '          '
 
     def _build_thread_overview(self, thread: Dict[str, Any], messages: List[Dict[str, Any]],
                                preview_width: int, h: int) -> List[str]:
         """Return preview lines showing a lore-style thread overview."""
-        lines = [f"Thread overview: {thread['count']} messages", ""]
+        lines = [f"Thread overview: {len(messages)} messages", ""]
 
         for msg in messages:
-            subject = msg.get('subject', '(No Subject)').strip()
-            sender = msg.get('from', '').strip()
+            subject = self._decode_header(msg.get('subject', '(No Subject)').strip())
+            sender = self._decode_header(msg.get('from', '').strip())
             date_fmt = self._parse_overview_date(msg.get('date', ''))
 
             refs = msg.get('references', '') or ''
