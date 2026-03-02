@@ -432,6 +432,29 @@ class ThreadSelectorTUI:
         stdscr.getch()
         self.show_help_overlay = False
 
+    def _build_body_preview(self, thread: Dict[str, Any], preview_width: int, h: int) -> List[str]:
+        """Return preview lines showing the first email body of the thread."""
+        lines = [
+            f"Subject: {thread['subject'][:preview_width-2]}",
+            f"Messages: {thread['count']}",
+            f"Participants: {thread['participants']}",
+            f"Last activity: {thread['last_activity']}",
+            f"Thread ID: {thread['thread_id'][:preview_width-2]}",
+            "",
+        ]
+
+        body_lines = self.fetch_email_body(thread['blob'], max(h - 14, 5))
+        for line in body_lines:
+            if len(lines) >= h - 3:
+                break
+            lines.append(self._sanitize_for_curses(line[:preview_width-1]))
+
+        return lines
+
+    def _get_preview_lines(self, thread: Dict[str, Any], preview_width: int, h: int) -> List[str]:
+        """Return the lines to display in the preview pane for the given thread."""
+        return self._build_body_preview(thread, preview_width, h)
+
     def render(self, stdscr):
         """Render the TUI."""
         if self.show_help_overlay:
@@ -499,20 +522,7 @@ class ThreadSelectorTUI:
 
         current_thread = self.threads[self.cursor] if self.threads else None
         if show_preview and current_thread and preview_width > 10:
-            preview_lines = [
-                f"Subject: {current_thread['subject'][:preview_width-2]}",
-                f"Messages: {current_thread['count']}",
-                f"Participants: {current_thread['participants']}",
-                f"Last activity: {current_thread['last_activity']}",
-                f"Thread ID: {current_thread['thread_id'][:preview_width-2]}",
-                "",
-            ]
-
-            body_lines = self.fetch_email_body(current_thread['blob'], max(h - 14, 5))
-            for line in body_lines:
-                if len(preview_lines) >= h - 3:
-                    break
-                preview_lines.append(self._sanitize_for_curses(line[:preview_width-1]))
+            preview_lines = self._get_preview_lines(current_thread, preview_width, h)
 
             for i, line in enumerate(preview_lines):
                 try:
