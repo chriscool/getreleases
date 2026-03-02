@@ -113,15 +113,16 @@ def get_latest_message_date(repo_path: str) -> Optional[str]:
         # Silently catch fetch/parse errors and return None
         return None
 
-def check_repo_up_to_date(repo_path: str) -> None:
+def check_repo_up_to_date(repo_path: str, quiet: bool = False) -> None:
     """Checks if the given lei repository/remote has recent emails."""
-    print(f"Checking if repository '{repo_path}' is up-to-date...", file=sys.stderr)
+    out = open(os.devnull, 'w') if quiet else sys.stderr
+    print(f"Checking if repository '{repo_path}' is up-to-date...", file=out)
 
     latest_dt_str = get_latest_message_date(repo_path)
 
     if not latest_dt_str:
-        print("\n[!] WARNING: No recent messages found in the last month.", file=sys.stderr)
-        print("    The repository might be severely outdated or unreachable.\n", file=sys.stderr)
+        print("\n[!] WARNING: No recent messages found in the last month.", file=out)
+        print("    The repository might be severely outdated or unreachable.\n", file=out)
         return
 
     try:
@@ -132,48 +133,48 @@ def check_repo_up_to_date(repo_path: str) -> None:
 
         # Warn if the database is more than 3 days behind
         if diff.days > 3:
-            print(f"\n[!] WARNING: The repository seems outdated.", file=sys.stderr)
-            print(f"    Latest message date: {latest_dt_str} ({diff.days} days behind).", file=sys.stderr)
+            print(f"\n[!] WARNING: The repository seems outdated.", file=out)
+            print(f"    Latest message date: {latest_dt_str} ({diff.days} days behind).", file=out)
 
             is_http = repo_path.startswith("http")
 
             if not is_http:
                 updated = False
                 # Check if running in an interactive terminal
-                if sys.stdin.isatty() and sys.stdout.isatty():
+                if not quiet and sys.stdin.isatty() and sys.stdout.isatty():
                     ans = input("Should I try to update the repo [Y/n]? ").strip().lower()
                     if ans in ['', 'y', 'yes']:
                         try:
-                            print(f"\nUpdating local repository at {repo_path}...", file=sys.stderr)
+                            print(f"\nUpdating local repository at {repo_path}...", file=out)
                             subprocess.run(["public-inbox-fetch"], cwd=repo_path, check=True)
                             subprocess.run(["public-inbox-index", "."], cwd=repo_path, check=True)
                             subprocess.run(["lei", "up", "--all"], check=True)
 
-                            # --- Use the abstracted function to verify the new date ---
                             new_dt_str = get_latest_message_date(repo_path)
                             if new_dt_str:
-                                print(f"Repository successfully updated! (New latest message: {new_dt_str})\n", file=sys.stderr)
+                                print(f"Repository successfully updated! (New latest message: {new_dt_str})\n", file=out)
                             else:
-                                print("Repository successfully updated! (Could not verify new date)\n", file=sys.stderr)
+                                print("Repository successfully updated! (Could not verify new date)\n", file=out)
 
                             updated = True
                         except subprocess.CalledProcessError as e:
-                            print(f"\n[!] Error during update: {e}", file=sys.stderr)
+                            print(f"\n[!] Error during update: {e}", file=out)
 
                 if not updated:
                     print("\n    To manually update the repository, please run:\n"
                           f"      cd {repo_path}\n"
                           "      public-inbox-fetch\n"
                           "      public-inbox-index .\n"
-                          "      lei up --all\n", file=sys.stderr)
+                          "      lei up --all\n", file=out)
         else:
-            print(f"Repository is up-to-date (Latest message: {latest_dt_str}).\n", file=sys.stderr)
+            print(f"Repository is up-to-date (Latest message: {latest_dt_str}).\n", file=out)
 
     except Exception as e:
-        print(f"Warning: Could not parse repo date. {e}", file=sys.stderr)
+        print(f"Warning: Could not parse repo date. {e}", file=out)
 
-def fetch_lei_thread(input_id: str, repo_path: Optional[str] = None) -> List[Dict[str, Any]]:
+def fetch_lei_thread(input_id: str, repo_path: Optional[str] = None, quiet: bool = False) -> List[Dict[str, Any]]:
     """Fetches a thread using lei and parses the mbox output."""
+    out = open(os.devnull, 'w') if quiet else sys.stdout
 
     with tempfile.NamedTemporaryFile(mode='w+', delete=False) as temp_mbox:
         temp_path = temp_mbox.name
@@ -200,7 +201,7 @@ def fetch_lei_thread(input_id: str, repo_path: Optional[str] = None) -> List[Dic
                 raise GitMLConverterError("Failed to resolve Blob ID to Message-ID.")
             final_query = f'm:"<{msg_id}>"'
 
-        print(f"Fetching thread via query: {final_query}")
+        print(f"Fetching thread via query: {final_query}", file=out)
 
         # 2. Build command
         cmd = ["lei", "q", "-t", "-o", f"mboxrd:{temp_path}"]
@@ -209,8 +210,8 @@ def fetch_lei_thread(input_id: str, repo_path: Optional[str] = None) -> List[Dic
         # This bypasses the need for 'lei add-external' or 'lei up'
         if repo_path:
             if repo_path.startswith('http') or os.path.exists(repo_path):
-                print(f"Using direct repository: {repo_path}")
-                check_repo_up_to_date(repo_path)
+                print(f"Using direct repository: {repo_path}", file=out)
+                check_repo_up_to_date(repo_path, quiet=quiet)
                 cmd.extend(["--only", repo_path])
             else:
                 print(f"Warning: Repo path '{repo_path}' does not exist.", file=sys.stderr)

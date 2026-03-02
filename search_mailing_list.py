@@ -331,6 +331,7 @@ class ThreadSelectorTUI:
         self._preview_cache = {}
         self._overview_cache = {}
         self._overview_loading = set()
+        self._fetch_done = threading.Event()
 
     def _sanitize_for_curses(self, text: str) -> str:
         """Remove non-printable and control characters for curses display."""
@@ -399,11 +400,12 @@ class ThreadSelectorTUI:
 
         def _fetch():
             try:
-                messages = git_ml_converter.fetch_lei_thread(root_mid, self.repo_path)
+                messages = git_ml_converter.fetch_lei_thread(root_mid, self.repo_path, quiet=True)
             except Exception:
                 messages = []
             self._overview_cache[root_mid] = messages
             self._overview_loading.discard(root_mid)
+            self._fetch_done.set()
 
         threading.Thread(target=_fetch, daemon=True).start()
         return None
@@ -543,7 +545,7 @@ class ThreadSelectorTUI:
             self.show_help(stdscr)
             return
         
-        stdscr.clear()
+        stdscr.erase()
         h, w = stdscr.getmaxyx()
 
         if self.show_preview and w >= 105:
@@ -648,8 +650,12 @@ class ThreadSelectorTUI:
         else:
             if key in (curses.KEY_UP, ord('k')):
                 self.cursor = max(0, self.cursor - 1)
+                if self.show_thread_overview:
+                    self.fetch_thread_overview(self.threads[self.cursor]['root_mid'])
             elif key in (curses.KEY_DOWN, ord('j')):
                 self.cursor = min(len(self.threads) - 1, self.cursor + 1)
+                if self.show_thread_overview:
+                    self.fetch_thread_overview(self.threads[self.cursor]['root_mid'])
             elif key == ord(' '):
                 self.selected[self.cursor] = not self.selected[self.cursor]
             elif key in (ord('q'), ord('Q')):
@@ -684,7 +690,21 @@ class ThreadSelectorTUI:
 
             while True:
                 self.render(stdscr)
+                curses.doupdate()
+
+                fetch_done = self._fetch_done.is_set()
+                loading = bool(self._overview_loading)
+
+                if fetch_done:
+                    self._fetch_done.clear()
+                if fetch_done or loading:
+                    stdscr.timeout(200)
+                else:
+                    stdscr.timeout(-1)
+
                 key = stdscr.getch()
+                if key == curses.ERR:
+                    continue
 
                 result = self.handle_input(key)
                 if result is not None:
