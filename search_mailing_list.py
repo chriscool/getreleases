@@ -597,7 +597,10 @@ class ThreadSelectorTUI:
             self._render_fullscreen(stdscr, h, w)
             return
 
-        # Split-pane mode (original layout)
+        self._render_split(stdscr, h, w)
+
+    def _render_split(self, stdscr, h: int, w: int) -> None:
+        """Render split-pane mode: thread list on the left, optional preview on the right."""
         if self.show_preview and w >= 105:
             list_width = max(55, min(w // 2, 140))
             preview_width = w - list_width - 1
