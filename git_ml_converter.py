@@ -353,6 +353,8 @@ def parse_mbox_content(mbox_path: str) -> List[Dict[str, Any]]:
             'subject': msg.get('Subject', '').replace('Subject:', '').strip(),
             'from': msg.get('From', '').strip(),
             'date': msg.get('Date', '').strip(),
+            'in_reply_to': msg.get('In-Reply-To', '').strip(),
+            'references': msg.get('References', '').strip(),
             'body': body_text.splitlines(),
             'is_reply': msg.get('Subject', '').lower().strip().startswith('re:') or bool(msg.get('In-Reply-To'))
         }

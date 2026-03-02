@@ -8,6 +8,7 @@ import sys
 import shutil
 import os
 import re
+import threading
 from datetime import datetime, timedelta
 from collections import defaultdict
 from typing import Optional, List, Dict, Any
@@ -325,7 +326,10 @@ class ThreadSelectorTUI:
         self.repo_path = repo_path
         self.edition = edition
         self.done_mids = done_mids or set()
+        self.show_thread_overview = False
         self._preview_cache = {}
+        self._overview_cache = {}
+        self._overview_loading = set()
 
     def _sanitize_for_curses(self, text: str) -> str:
         """Remove non-printable characters for curses display."""
@@ -378,6 +382,31 @@ class ThreadSelectorTUI:
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
             return []
 
+    def fetch_thread_overview(self, root_mid: str) -> Optional[List[Dict[str, Any]]]:
+        """Fetch the full thread messages for the given root Message-ID.
+
+        Returns the list of message dicts if available, or None if still loading.
+        Fetching is done in a background thread; the result is cached.
+        """
+        if root_mid in self._overview_cache:
+            return self._overview_cache[root_mid]
+
+        if root_mid in self._overview_loading:
+            return None
+
+        self._overview_loading.add(root_mid)
+
+        def _fetch():
+            try:
+                messages = git_ml_converter.fetch_lei_thread(root_mid, self.repo_path)
+            except Exception:
+                messages = []
+            self._overview_cache[root_mid] = messages
+            self._overview_loading.discard(root_mid)
+
+        threading.Thread(target=_fetch, daemon=True).start()
+        return None
+
     def find_matches(self, term: str) -> List[int]:
         """Find thread indices matching the search term."""
         if not term:
@@ -417,6 +446,7 @@ class ThreadSelectorTUI:
             "",
             "Other:",
             "  Ctrl+P      - Toggle preview window",
+            "  Ctrl+T      - Toggle body / thread overview in preview",
             "  ?           - Show this help",
             "  Q           - Quit and return selected threads",
             "",
@@ -451,9 +481,48 @@ class ThreadSelectorTUI:
 
         return lines
 
+    @staticmethod
+    def _parse_overview_date(date_str: str) -> str:
+        """Parse an RFC 2822 date string into YYYY-MM-DD, or return blanks on failure."""
+        for fmt in ('%a, %d %b %Y %H:%M:%S %z', '%d %b %Y %H:%M:%S %z',
+                    '%a, %d %b %Y %H:%M:%S', '%d %b %Y %H:%M:%S'):
+            try:
+                return datetime.strptime(date_str.strip(), fmt).strftime('%Y-%m-%d')
+            except ValueError:
+                continue
+        return '          '
+
+    def _build_thread_overview(self, thread: Dict[str, Any], messages: List[Dict[str, Any]],
+                               preview_width: int, h: int) -> List[str]:
+        """Return preview lines showing a lore-style thread overview."""
+        lines = [f"Thread overview: {thread['count']} messages", ""]
+
+        for msg in messages:
+            subject = msg.get('subject', '(No Subject)').strip()
+            sender = msg.get('from', '').strip()
+            date_fmt = self._parse_overview_date(msg.get('date', ''))
+
+            refs = msg.get('references', '') or ''
+            depth = len(refs.split()) if refs.strip() else 0
+            indent = '` ' * depth
+
+            entry = f"{date_fmt} {indent}{subject} {sender}"
+            lines.append(self._sanitize_for_curses(entry[:preview_width-1]))
+
+            if len(lines) >= h - 3:
+                break
+
+        return lines
+
     def _get_preview_lines(self, thread: Dict[str, Any], preview_width: int, h: int) -> List[str]:
         """Return the lines to display in the preview pane for the given thread."""
-        return self._build_body_preview(thread, preview_width, h)
+        if not self.show_thread_overview:
+            return self._build_body_preview(thread, preview_width, h)
+
+        messages = self.fetch_thread_overview(thread['root_mid'])
+        if messages is None:
+            return ["Loading..."]
+        return self._build_thread_overview(thread, messages, preview_width, h)
 
     def render(self, stdscr):
         """Render the TUI."""
@@ -484,7 +553,8 @@ class ThreadSelectorTUI:
         stdscr.addstr(0, 0, title[:list_width-1])
         if show_preview:
             stdscr.addstr(0, list_width, "│")
-            stdscr.addstr(0, list_width + 1, "Preview")
+            preview_label = "Thread overview (Ctrl+T to toggle)" if self.show_thread_overview else "Body preview (Ctrl+T to toggle)"
+            stdscr.addstr(0, list_width + 1, preview_label[:preview_width - 1])
 
         header = f"{'Age':<3} | {'Msgs':<4} | {'Ppl':<3} | {'Subject':<{subject_width}}"
         stdscr.addstr(1, 0, header[:list_width-1])
@@ -539,6 +609,9 @@ class ThreadSelectorTUI:
         """Handle key input. Returns list of selected blobs if quit, None otherwise."""
         if key == 16:  # Ctrl+P
             self.show_preview = not self.show_preview
+            return None
+        if key == 20:  # Ctrl+T
+            self.show_thread_overview = not self.show_thread_overview
             return None
         if self.searching:
             if key in (curses.KEY_ENTER, 10, 13):
