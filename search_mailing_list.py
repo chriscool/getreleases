@@ -673,6 +673,60 @@ class ThreadSelectorTUI:
             stdscr.addstr(h-2, 0, f"Match: {self.current_match_idx + 1}/{len(self.search_matches)}"[:list_width-1])
         stdscr.addstr(h-1, 0, f"Selected: {sum(self.selected)}/{len(self.threads)}"[:list_width-1])
 
+    def _handle_input_search(self, key: int) -> None:
+        """Handle key input while in search mode."""
+        if key in (curses.KEY_ENTER, 10, 13):
+            self.searching = False
+            if self.search_matches:
+                self.cursor = self.search_matches[self.current_match_idx]
+        elif key == 27:  # Escape
+            self.searching = False
+            self.search_term = ""
+            self.search_matches = []
+            self.current_match_idx = -1
+        elif key in (curses.KEY_BACKSPACE, 127):
+            self.search_term = self.search_term[:-1]
+            self.search_matches = self.find_matches(self.search_term)
+            self.current_match_idx = 0 if self.search_matches else -1
+        elif 32 <= key <= 126:
+            self.search_term += chr(key)
+            self.search_matches = self.find_matches(self.search_term)
+            self.current_match_idx = 0 if self.search_matches else -1
+
+    def _handle_input_thread_list(self, key: int) -> Optional[List[str]]:
+        """Handle key input when focus is on the thread list."""
+        if key in (curses.KEY_UP, ord('k')):
+            self.cursor = max(0, self.cursor - 1)
+            if self.preview_mode == 'THREAD':
+                self.fetch_thread_overview(self.threads[self.cursor]['root_mid'])
+        elif key in (curses.KEY_DOWN, ord('j')):
+            self.cursor = min(len(self.threads) - 1, self.cursor + 1)
+            if self.preview_mode == 'THREAD':
+                self.fetch_thread_overview(self.threads[self.cursor]['root_mid'])
+        elif key == ord(' '):
+            self.selected[self.cursor] = not self.selected[self.cursor]
+        elif key in (ord('q'), ord('Q')):
+            return [self.threads[i]['root_mid'] for i in range(len(self.threads)) if self.selected[i]]
+        elif key == ord('?'):
+            self.show_help_overlay = True
+        elif key == ord('a'):
+            all_selected = all(self.selected)
+            self.selected = [not all_selected] * len(self.threads)
+        elif key == ord('/'):
+            self.searching = True
+            self.search_term = ""
+            self.search_matches = []
+            self.current_match_idx = -1
+        elif key == ord('n'):
+            if self.search_matches:
+                self.current_match_idx = (self.current_match_idx + 1) % len(self.search_matches)
+                self.cursor = self.search_matches[self.current_match_idx]
+        elif key == ord('p'):
+            if self.search_matches:
+                self.current_match_idx = (self.current_match_idx - 1) % len(self.search_matches)
+                self.cursor = self.search_matches[self.current_match_idx]
+        return None
+
     def handle_input(self, key: int) -> Optional[List[str]]:
         """Handle key input. Returns list of selected blobs if quit, None otherwise."""
         if self.show_help_overlay:
@@ -686,64 +740,15 @@ class ThreadSelectorTUI:
             return None
         if key == 6:  # Ctrl+F - Full-screen toggle
             if self.view_mode == 'FULLSCREEN':
-                # Return to split-pane
                 self.view_mode = 'SPLIT'
             else:
-                # Enter full-screen (ensure preview is visible)
                 self.show_preview = True
                 self.view_mode = 'FULLSCREEN'
             return None
         if self.searching:
-            if key in (curses.KEY_ENTER, 10, 13):
-                self.searching = False
-                if self.search_matches:
-                    self.cursor = self.search_matches[self.current_match_idx]
-            elif key == 27:  # Escape
-                self.searching = False
-                self.search_term = ""
-                self.search_matches = []
-                self.current_match_idx = -1
-            elif key in (curses.KEY_BACKSPACE, 127):
-                self.search_term = self.search_term[:-1]
-                self.search_matches = self.find_matches(self.search_term)
-                self.current_match_idx = 0 if self.search_matches else -1
-            elif 32 <= key <= 126:
-                self.search_term += chr(key)
-                self.search_matches = self.find_matches(self.search_term)
-                self.current_match_idx = 0 if self.search_matches else -1
+            self._handle_input_search(key)
             return None
-        else:
-            if key in (curses.KEY_UP, ord('k')):
-                self.cursor = max(0, self.cursor - 1)
-                if self.preview_mode == 'THREAD':
-                    self.fetch_thread_overview(self.threads[self.cursor]['root_mid'])
-            elif key in (curses.KEY_DOWN, ord('j')):
-                self.cursor = min(len(self.threads) - 1, self.cursor + 1)
-                if self.preview_mode == 'THREAD':
-                    self.fetch_thread_overview(self.threads[self.cursor]['root_mid'])
-            elif key == ord(' '):
-                self.selected[self.cursor] = not self.selected[self.cursor]
-            elif key in (ord('q'), ord('Q')):
-                return [self.threads[i]['root_mid'] for i in range(len(self.threads)) if self.selected[i]]
-            elif key == ord('?'):
-                self.show_help_overlay = True
-            elif key == ord('a'):
-                all_selected = all(self.selected)
-                self.selected = [not all_selected] * len(self.threads)
-            elif key == ord('/'):
-                self.searching = True
-                self.search_term = ""
-                self.search_matches = []
-                self.current_match_idx = -1
-            elif key == ord('n'):
-                if self.search_matches:
-                    self.current_match_idx = (self.current_match_idx + 1) % len(self.search_matches)
-                    self.cursor = self.search_matches[self.current_match_idx]
-            elif key == ord('p'):
-                if self.search_matches:
-                    self.current_match_idx = (self.current_match_idx - 1) % len(self.search_matches)
-                    self.cursor = self.search_matches[self.current_match_idx]
-            return None
+        return self._handle_input_thread_list(key)
 
     def run(self) -> List[str]:
         """Main entry point for the TUI."""
