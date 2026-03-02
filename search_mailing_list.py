@@ -766,6 +766,9 @@ class ThreadSelectorTUI:
         elif self.ws.cursor >= self.ws.offset + visible_rows:
             self.ws.offset = self.ws.cursor - visible_rows + 1
 
+        more_above = self.ws.offset > 0
+        more_below = self.ws.offset + visible_rows < len(self.ws.threads)
+
         for i in range(self.ws.offset, min(len(self.ws.threads), self.ws.offset + visible_rows)):
             row = i - self.ws.offset + 3
             if row >= h:
@@ -785,6 +788,18 @@ class ThreadSelectorTUI:
                 stdscr.addstr(row, 0, line[:list_width-1], curses.A_REVERSE)
             else:
                 stdscr.addstr(row, 0, line[:list_width-1])
+
+        if more_above:
+            try:
+                stdscr.addstr(3, list_width - 2, "▲")
+            except curses.error:
+                pass
+        if more_below:
+            last_row = min(3 + visible_rows, h - 2) - 1
+            try:
+                stdscr.addstr(last_row, list_width - 2, "▼")
+            except curses.error:
+                pass
 
         current_thread = self.ws.threads[self.ws.cursor] if self.ws.threads else None
         if show_preview and current_thread and preview_width > 10:
