@@ -11,7 +11,6 @@ import re
 import threading
 from datetime import datetime, timedelta
 from collections import defaultdict
-from email.header import decode_header, make_header
 from typing import Optional, List, Dict, Any, Tuple
 
 try:
@@ -309,6 +308,30 @@ class MailingListStore:
         return valid_threads
 
 
+def _decode_header(value: str) -> str:
+    """Decode an RFC 2047 encoded email header value to a plain string."""
+    try:
+        from email.header import decode_header, make_header
+        return str(make_header(decode_header(value)))
+    except Exception:
+        return value
+
+
+def _parse_overview_date(date_str: str) -> str:
+    """Parse an RFC 2822 date string into YYYY-MM-DD, or return blanks on failure."""
+    from email.utils import parsedate
+    date_str = date_str.strip()
+    if not date_str:
+        return '          '
+    parsed = parsedate(date_str)
+    if parsed:
+        try:
+            return datetime(*parsed[:3]).strftime('%Y-%m-%d')
+        except Exception:
+            pass
+    return '          '
+
+
 class ThreadSelectorTUI:
     """Manages the curses-based thread selection interface."""
 
@@ -501,9 +524,9 @@ class ThreadSelectorTUI:
         messages = self.fetch_thread_overview(thread['root_mid'])
         if messages:
             msg = messages[min(self.thread_cursor, len(messages) - 1)]
-            from_hdr = self._decode_header(msg.get('from', ''))
+            from_hdr = _decode_header(msg.get('from', ''))
             date_hdr = msg.get('date', '')
-            subject_hdr = self._decode_header(msg.get('subject', ''))
+            subject_hdr = _decode_header(msg.get('subject', ''))
             body_lines = [self._sanitize_for_curses(l[:preview_width-1]) for l in msg.get('body', [])]
         else:
             from_hdr = ''
@@ -526,29 +549,6 @@ class ThreadSelectorTUI:
 
         return header + [(line, 0) for line in visible]
 
-    @staticmethod
-    def _decode_header(value: str) -> str:
-        """Decode an RFC 2047 encoded header value to a plain string."""
-        try:
-            return str(make_header(decode_header(value)))
-        except Exception:
-            return value
-
-    @staticmethod
-    def _parse_overview_date(date_str: str) -> str:
-        """Parse an RFC 2822 date string into YYYY-MM-DD, or return blanks on failure."""
-        from email.utils import parsedate
-        date_str = date_str.strip()
-        if not date_str:
-            return '          '
-        parsed = parsedate(date_str)
-        if parsed:
-            try:
-                return datetime(*parsed[:3]).strftime('%Y-%m-%d')
-            except Exception:
-                pass
-        return '          '
-
     def _build_thread_overview(self, messages: List[Dict[str, Any]],
                                preview_width: int, h: int) -> List[Tuple[str, int]]:
         """Return preview lines showing a lore-style thread overview with cursor highlight."""
@@ -565,9 +565,9 @@ class ThreadSelectorTUI:
 
         for idx in range(self.thread_scroll_offset, min(len(messages), self.thread_scroll_offset + available)):
             msg = messages[idx]
-            subject = self._decode_header(msg.get('subject', '(No Subject)').strip())
-            sender = self._decode_header(msg.get('from', '').strip())
-            date_fmt = self._parse_overview_date(msg.get('date', ''))
+            subject = _decode_header(msg.get('subject', '(No Subject)').strip())
+            sender = _decode_header(msg.get('from', '').strip())
+            date_fmt = _parse_overview_date(msg.get('date', ''))
 
             refs = msg.get('references', '') or ''
             depth = len(refs.split()) if refs.strip() else 0
