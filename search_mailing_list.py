@@ -558,44 +558,43 @@ class ThreadSelectorTUI:
             return ["Loading..."]
         return self._build_thread_overview(thread, messages, preview_width, h)
 
+    def _render_fullscreen(self, stdscr, h: int, w: int) -> None:
+        """Render full-screen mode: preview/overview takes entire terminal."""
+        current_thread = self.threads[self.cursor] if self.threads else None
+        if not current_thread:
+            return
+
+        edition_prefix = f"Edition {self.edition} | " if self.edition is not None else ""
+        mode_name = "Thread Overview" if self.preview_mode == 'THREAD' else "Message Preview"
+        title = f"{edition_prefix}{mode_name} - Full Screen (Ctrl+F: exit, Ctrl+P/T: switch mode)"
+        stdscr.addstr(0, 0, title[:w-1], curses.A_BOLD)
+
+        subject_line = f"Thread: {current_thread['subject']}"
+        stdscr.addstr(1, 0, subject_line[:w-1])
+        stdscr.addstr(2, 0, "─" * min(w - 1, 120))
+
+        preview_lines = self._get_preview_lines(current_thread, w - 2, h)
+        for i, line in enumerate(preview_lines):
+            try:
+                if 3 + i < h - 1:
+                    stdscr.addstr(3 + i, 0, line[:w-1])
+            except curses.error:
+                pass
+
+        status = f"Selected: {sum(self.selected)}/{len(self.threads)} | Thread {self.cursor + 1}/{len(self.threads)}"
+        stdscr.addstr(h-1, 0, status[:w-1])
+
     def render(self, stdscr):
         """Render the TUI."""
         if self.show_help_overlay:
             self.show_help(stdscr)
             return
-        
+
         stdscr.erase()
         h, w = stdscr.getmaxyx()
 
-        # Full-screen mode: show only the preview/overview taking entire screen
         if self.view_mode == 'FULLSCREEN':
-            current_thread = self.threads[self.cursor] if self.threads else None
-            if current_thread:
-                # Title bar
-                edition_prefix = f"Edition {self.edition} | " if self.edition is not None else ""
-                mode_name = "Thread Overview" if self.preview_mode == 'THREAD' else "Message Preview"
-                title = f"{edition_prefix}{mode_name} - Full Screen (Ctrl+F: exit, Ctrl+P/T: switch mode)"
-                stdscr.addstr(0, 0, title[:w-1], curses.A_BOLD)
-
-                # Thread subject line
-                subject_line = f"Thread: {current_thread['subject']}"
-                stdscr.addstr(1, 0, subject_line[:w-1])
-                stdscr.addstr(2, 0, "─" * min(w - 1, 120))
-
-                # Get preview lines for full width
-                preview_lines = self._get_preview_lines(current_thread, w - 2, h)
-
-                # Render preview content
-                for i, line in enumerate(preview_lines):
-                    try:
-                        if 3 + i < h - 1:
-                            stdscr.addstr(3 + i, 0, line[:w-1])
-                    except curses.error:
-                        pass
-
-                # Status bar at bottom
-                status = f"Selected: {sum(self.selected)}/{len(self.threads)} | Thread {self.cursor + 1}/{len(self.threads)}"
-                stdscr.addstr(h-1, 0, status[:w-1])
+            self._render_fullscreen(stdscr, h, w)
             return
 
         # Split-pane mode (original layout)
