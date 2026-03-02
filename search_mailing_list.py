@@ -332,6 +332,127 @@ def _parse_overview_date(date_str: str) -> str:
     return '          '
 
 
+class ThreadWorkspace:
+    """Manages thread list state, selection, navigation and data fetching.
+
+    Owns all state independent of how the UI is rendered: thread list,
+    selection, search, message navigation within a thread, and data cache.
+    Has no dependency on curses.
+    """
+
+    def __init__(self, threads: List[Dict[str, Any]], repo_path: Optional[str],
+                 edition: Optional[int], done_mids: Optional[set]):
+        self.threads = threads
+        self.selected = [False] * len(threads)
+        self.cursor = 0
+        self.offset = 0
+        self.repo_path = repo_path
+        self.edition = edition
+        self.done_mids = done_mids or set()
+
+        self.search_term = ""
+        self.search_matches: List[int] = []
+        self.current_match_idx = -1
+        self.searching = False
+
+        self.thread_cursor = 0
+        self.thread_scroll_offset = 0
+        self.message_scroll_offset = 0
+
+        self._preview_cache: Dict[str, List[str]] = {}
+        self._overview_cache: Dict[str, List[Dict[str, Any]]] = {}
+        self._overview_loading: set = set()
+        self._fetch_done = threading.Event()
+
+    @property
+    def is_loading(self) -> bool:
+        """True if any background thread fetch is in progress."""
+        return bool(self._overview_loading)
+
+    def consume_fetch_done(self) -> bool:
+        """Return True and clear the flag if a background fetch just completed."""
+        if self._fetch_done.is_set():
+            self._fetch_done.clear()
+            return True
+        return False
+
+    def fetch_email_body(self, blob_id: str, max_lines: int = 20) -> List[str]:
+        """Fetch the email body using git show, with caching."""
+        cache_key = f"{blob_id}:{max_lines}"
+        if cache_key in self._preview_cache:
+            return self._preview_cache[cache_key]
+
+        if not self.repo_path:
+            return []
+
+        try:
+            cmd = ["git", "show", blob_id]
+            cwd = None
+            if os.path.isdir(self.repo_path):
+                v2_all = os.path.join(self.repo_path, "all.git")
+                if os.path.isdir(v2_all):
+                    cwd = v2_all
+                else:
+                    cwd = self.repo_path
+
+            result = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, errors='replace', timeout=10)
+            lines = result.stdout.splitlines()
+
+            body_lines = []
+            header_ended = False
+            for idx, line in enumerate(lines):
+                if not header_ended:
+                    if line == '':
+                        next_line = lines[idx + 1] if idx + 1 < len(lines) else ''
+                        if not next_line or next_line[0] not in ' \t':
+                            header_ended = True
+                    if not header_ended:
+                        continue
+                body_lines.append(line)
+
+            self._preview_cache[cache_key] = body_lines[:max_lines]
+            return self._preview_cache[cache_key]
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+            return []
+
+    def fetch_thread_overview(self, root_mid: str) -> Optional[List[Dict[str, Any]]]:
+        """Fetch the full thread messages for the given root Message-ID.
+
+        Returns the list of message dicts if cached, or None if still loading.
+        Fetching is done in a background thread; the result is cached.
+        """
+        if root_mid in self._overview_cache:
+            return self._overview_cache[root_mid]
+
+        if root_mid in self._overview_loading:
+            return None
+
+        self._overview_loading.add(root_mid)
+
+        def _fetch():
+            try:
+                messages = git_ml_converter.fetch_lei_thread(root_mid, self.repo_path, quiet=True)
+            except Exception:
+                messages = []
+            self._overview_cache[root_mid] = messages
+            self._overview_loading.discard(root_mid)
+            self._fetch_done.set()
+
+        threading.Thread(target=_fetch, daemon=True).start()
+        return None
+
+    def find_matches(self, term: str) -> List[int]:
+        """Find thread indices whose subject contains term (case-insensitive)."""
+        if not term:
+            return []
+        term_lower = term.lower()
+        return [i for i, t in enumerate(self.threads) if term_lower in t['subject'].lower()]
+
+    def get_selected_mids(self) -> List[str]:
+        """Return the root Message-IDs of all selected threads."""
+        return [self.threads[i]['root_mid'] for i in range(len(self.threads)) if self.selected[i]]
+
+
 class ThreadSelectorTUI:
     """Manages the curses-based thread selection interface."""
 
