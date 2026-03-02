@@ -12,7 +12,7 @@ import threading
 from datetime import datetime, timedelta
 from collections import defaultdict
 from email.header import decode_header, make_header
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 
 try:
     import curses
@@ -489,22 +489,22 @@ class ThreadSelectorTUI:
 
         curses.doupdate()
 
-    def _build_body_preview(self, thread: Dict[str, Any], preview_width: int, h: int) -> List[str]:
+    def _build_body_preview(self, thread: Dict[str, Any], preview_width: int, h: int) -> List[Tuple[str, int]]:
         """Return preview lines showing the first email body of the thread."""
-        lines = [
-            f"Subject: {thread['subject'][:preview_width-2]}",
-            f"Messages: {thread['count']}",
-            f"Participants: {thread['participants']}",
-            f"Last activity: {thread['last_activity']}",
-            f"Thread ID: {thread['thread_id'][:preview_width-2]}",
-            "",
+        lines: List[Tuple[str, int]] = [
+            (f"Subject: {thread['subject'][:preview_width-2]}", 0),
+            (f"Messages: {thread['count']}", 0),
+            (f"Participants: {thread['participants']}", 0),
+            (f"Last activity: {thread['last_activity']}", 0),
+            (f"Thread ID: {thread['thread_id'][:preview_width-2]}", 0),
+            ("", 0),
         ]
 
         body_lines = self.fetch_email_body(thread['blob'], max(h - 14, 5))
         for line in body_lines:
             if len(lines) >= h - 3:
                 break
-            lines.append(self._sanitize_for_curses(line[:preview_width-1]))
+            lines.append((self._sanitize_for_curses(line[:preview_width-1]), 0))
 
         return lines
 
@@ -531,12 +531,22 @@ class ThreadSelectorTUI:
                 pass
         return '          '
 
-    def _build_thread_overview(self, thread: Dict[str, Any], messages: List[Dict[str, Any]],
-                               preview_width: int, h: int) -> List[str]:
-        """Return preview lines showing a lore-style thread overview."""
-        lines = [f"Thread overview: {len(messages)} messages", ""]
+    def _build_thread_overview(self, messages: List[Dict[str, Any]],
+                               preview_width: int, h: int) -> List[Tuple[str, int]]:
+        """Return preview lines showing a lore-style thread overview with cursor highlight."""
+        available = h - 5  # Lines available for messages (below header row)
 
-        for msg in messages:
+        # Adjust scroll offset to keep thread_cursor visible
+        if self.thread_cursor < self.thread_scroll_offset:
+            self.thread_scroll_offset = self.thread_cursor
+        elif self.thread_cursor >= self.thread_scroll_offset + available:
+            self.thread_scroll_offset = self.thread_cursor - available + 1
+
+        header = f"Thread overview: {len(messages)} messages"
+        lines: List[Tuple[str, int]] = [(header, 0), ("", 0)]
+
+        for idx in range(self.thread_scroll_offset, min(len(messages), self.thread_scroll_offset + available)):
+            msg = messages[idx]
             subject = self._decode_header(msg.get('subject', '(No Subject)').strip())
             sender = self._decode_header(msg.get('from', '').strip())
             date_fmt = self._parse_overview_date(msg.get('date', ''))
@@ -545,23 +555,22 @@ class ThreadSelectorTUI:
             depth = len(refs.split()) if refs.strip() else 0
             indent = '` ' * depth
 
-            entry = f"{date_fmt} {indent}{subject} {sender}"
-            lines.append(self._sanitize_for_curses(entry[:preview_width-1]))
-
-            if len(lines) >= h - 3:
-                break
+            cursor_marker = '►' if idx == self.thread_cursor else ' '
+            entry = f"{cursor_marker} {date_fmt} {indent}{subject} {sender}"
+            attr = curses.A_REVERSE if idx == self.thread_cursor else 0
+            lines.append((self._sanitize_for_curses(entry[:preview_width-1]), attr))
 
         return lines
 
-    def _get_preview_lines(self, thread: Dict[str, Any], preview_width: int, h: int) -> List[str]:
+    def _get_preview_lines(self, thread: Dict[str, Any], preview_width: int, h: int) -> List[Tuple[str, int]]:
         """Return the lines to display in the preview pane for the given thread."""
         if self.preview_mode == 'MESSAGE':
             return self._build_body_preview(thread, preview_width, h)
 
         messages = self.fetch_thread_overview(thread['root_mid'])
         if messages is None:
-            return ["Loading..."]
-        return self._build_thread_overview(thread, messages, preview_width, h)
+            return [("Loading...", 0)]
+        return self._build_thread_overview(messages, preview_width, h)
 
     def _render_fullscreen(self, stdscr, h: int, w: int) -> None:
         """Render full-screen mode: preview/overview takes entire terminal."""
@@ -579,10 +588,10 @@ class ThreadSelectorTUI:
         stdscr.addstr(2, 0, "─" * min(w - 1, 120))
 
         preview_lines = self._get_preview_lines(current_thread, w - 2, h)
-        for i, line in enumerate(preview_lines):
+        for i, (line, attr) in enumerate(preview_lines):
             try:
                 if 3 + i < h - 1:
-                    stdscr.addstr(3 + i, 0, line[:w-1])
+                    stdscr.addstr(3 + i, 0, line[:w-1], attr)
             except curses.error:
                 pass
 
@@ -667,10 +676,10 @@ class ThreadSelectorTUI:
         if show_preview and current_thread and preview_width > 10:
             preview_lines = self._get_preview_lines(current_thread, preview_width, h)
 
-            for i, line in enumerate(preview_lines):
+            for i, (line, attr) in enumerate(preview_lines):
                 try:
                     if 3 + i < h:
-                        stdscr.addstr(3 + i, list_width + 1, line[:preview_width - 1])
+                        stdscr.addstr(3 + i, list_width + 1, line[:preview_width - 1], attr)
                 except curses.error:
                     pass
 
@@ -702,10 +711,16 @@ class ThreadSelectorTUI:
         """Handle key input when focus is on the thread list."""
         if key in (curses.KEY_UP, ord('k')):
             self.cursor = max(0, self.cursor - 1)
+            self.thread_cursor = 0
+            self.thread_scroll_offset = 0
+            self.message_scroll_offset = 0
             if self.preview_mode == 'THREAD':
                 self.fetch_thread_overview(self.threads[self.cursor]['root_mid'])
         elif key in (curses.KEY_DOWN, ord('j')):
             self.cursor = min(len(self.threads) - 1, self.cursor + 1)
+            self.thread_cursor = 0
+            self.thread_scroll_offset = 0
+            self.message_scroll_offset = 0
             if self.preview_mode == 'THREAD':
                 self.fetch_thread_overview(self.threads[self.cursor]['root_mid'])
         elif key == ord(' '):
