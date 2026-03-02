@@ -432,6 +432,7 @@ class ThreadSelectorTUI:
         """
         if self.show_preview and self.preview_mode == mode:
             self.show_preview = False
+            self.focus = 'THREAD_LIST'  # Reset focus when preview hidden
         elif self.show_preview:
             self.preview_mode = mode
         else:
@@ -731,6 +732,35 @@ class ThreadSelectorTUI:
                 self.cursor = self.search_matches[self.current_match_idx]
         return None
 
+    def _handle_input_preview(self, key: int) -> Optional[List[str]]:
+        """Handle key input when focus is on the preview pane."""
+        messages = self.fetch_thread_overview(self.threads[self.cursor]['root_mid'])
+        msg_count = len(messages) if messages else 0
+
+        if self.preview_mode == 'THREAD':
+            if key in (curses.KEY_UP, ord('k')):
+                self.thread_cursor = max(0, self.thread_cursor - 1)
+                self.thread_scroll_offset = min(self.thread_scroll_offset, self.thread_cursor)
+            elif key in (curses.KEY_DOWN, ord('j')):
+                self.thread_cursor = min(max(0, msg_count - 1), self.thread_cursor + 1)
+        elif self.preview_mode == 'MESSAGE':
+            if key in (curses.KEY_UP, ord('k')):
+                self.message_scroll_offset = max(0, self.message_scroll_offset - 1)
+            elif key in (curses.KEY_DOWN, ord('j')):
+                self.message_scroll_offset += 1
+
+        if key == 9:  # Tab - return focus to thread list (split-pane only)
+            self.focus = 'THREAD_LIST'
+        elif key == 27:  # Escape
+            if self.view_mode == 'FULLSCREEN':
+                self.view_mode = 'SPLIT'
+                self.focus = 'THREAD_LIST'
+            else:
+                self.focus = 'THREAD_LIST'
+        elif key in (ord('q'), ord('Q')):
+            return [self.threads[i]['root_mid'] for i in range(len(self.threads)) if self.selected[i]]
+        return None
+
     def handle_input(self, key: int) -> Optional[List[str]]:
         """Handle key input. Returns list of selected blobs if quit, None otherwise."""
         if self.show_help_overlay:
@@ -738,6 +768,7 @@ class ThreadSelectorTUI:
             return None
         if key == 16:  # Ctrl+P - Message preview toggle
             self._toggle_preview_mode('MESSAGE')
+            self.message_scroll_offset = 0
             return None
         if key == 20:  # Ctrl+T - Thread overview toggle
             self._toggle_preview_mode('THREAD')
@@ -745,13 +776,21 @@ class ThreadSelectorTUI:
         if key == 6:  # Ctrl+F - Full-screen toggle
             if self.view_mode == 'FULLSCREEN':
                 self.view_mode = 'SPLIT'
+                self.focus = 'THREAD_LIST'
             else:
                 self.show_preview = True
                 self.view_mode = 'FULLSCREEN'
+                self.focus = 'PREVIEW'
+            return None
+        if key == 9:  # Tab - toggle focus between thread list and preview (split-pane only)
+            if self.view_mode == 'SPLIT' and self.show_preview:
+                self.focus = 'PREVIEW' if self.focus == 'THREAD_LIST' else 'THREAD_LIST'
             return None
         if self.searching:
             self._handle_input_search(key)
             return None
+        if self.view_mode == 'FULLSCREEN' or self.focus == 'PREVIEW':
+            return self._handle_input_preview(key)
         return self._handle_input_thread_list(key)
 
     def run(self) -> List[str]:
