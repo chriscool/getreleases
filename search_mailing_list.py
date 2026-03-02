@@ -417,6 +417,22 @@ class ThreadSelectorTUI:
         term_lower = term.lower()
         return [i for i, t in enumerate(self.threads) if term_lower in t['subject'].lower()]
 
+    def _toggle_preview_mode(self, mode: str) -> None:
+        """Toggle preview visibility and mode for the given mode ('MESSAGE' or 'THREAD').
+
+        Logic:
+        - If preview is showing the requested mode: hide preview
+        - If preview is showing the other mode: switch to requested mode
+        - If preview is hidden: show in requested mode
+        """
+        if self.show_preview and self.preview_mode == mode:
+            self.show_preview = False
+        elif self.show_preview:
+            self.preview_mode = mode
+        else:
+            self.show_preview = True
+            self.preview_mode = mode
+
     def show_help(self, stdscr):
         """Display help screen overlay."""
         h, w = stdscr.getmaxyx()
@@ -627,22 +643,10 @@ class ThreadSelectorTUI:
             self.show_help_overlay = False
             return None
         if key == 16:  # Ctrl+P - Message preview toggle
-            if self.show_preview and self.preview_mode == 'MESSAGE':
-                self.show_preview = False
-            elif self.show_preview and self.preview_mode == 'THREAD':
-                self.preview_mode = 'MESSAGE'
-            else:
-                self.show_preview = True
-                self.preview_mode = 'MESSAGE'
+            self._toggle_preview_mode('MESSAGE')
             return None
         if key == 20:  # Ctrl+T - Thread overview toggle
-            if self.show_preview and self.preview_mode == 'THREAD':
-                self.show_preview = False
-            elif self.show_preview and self.preview_mode == 'MESSAGE':
-                self.preview_mode = 'THREAD'
-            else:
-                self.show_preview = True
-                self.preview_mode = 'THREAD'
+            self._toggle_preview_mode('THREAD')
             return None
         if self.searching:
             if key in (curses.KEY_ENTER, 10, 13):
