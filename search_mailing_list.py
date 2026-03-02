@@ -359,6 +359,11 @@ class ThreadWorkspace:
         self.thread_scroll_offset = 0
         self.message_scroll_offset = 0
 
+        self.preview_searching = False
+        self.preview_search_term = ""
+        self.preview_search_matches: List[int] = []
+        self.preview_current_match = -1
+
         self._preview_cache: Dict[str, List[str]] = {}
         self._overview_cache: Dict[str, List[Dict[str, Any]]] = {}
         self._overview_loading: set = set()
@@ -516,6 +521,45 @@ class ThreadWorkspace:
         if self.search_matches:
             self.current_match_idx = (self.current_match_idx - 1) % len(self.search_matches)
             self.cursor = self.search_matches[self.current_match_idx]
+
+    def start_preview_search(self) -> None:
+        """Enter preview-pane search mode with an empty term."""
+        self.preview_searching = True
+        self.preview_search_term = ""
+        self.preview_search_matches = []
+        self.preview_current_match = -1
+
+    def update_preview_search(self, term: str, lines: List[str]) -> None:
+        """Update the preview search term and recompute line-index matches."""
+        self.preview_search_term = term
+        if term:
+            tl = term.lower()
+            self.preview_search_matches = [i for i, l in enumerate(lines) if tl in l.lower()]
+            self.preview_current_match = 0 if self.preview_search_matches else -1
+        else:
+            self.preview_search_matches = []
+            self.preview_current_match = -1
+
+    def confirm_preview_search(self) -> None:
+        """Exit preview search mode, keeping the current match highlighted."""
+        self.preview_searching = False
+
+    def cancel_preview_search(self) -> None:
+        """Exit preview search mode and clear all match state."""
+        self.preview_searching = False
+        self.preview_search_term = ""
+        self.preview_search_matches = []
+        self.preview_current_match = -1
+
+    def next_preview_match(self) -> None:
+        """Advance to the next preview search match, wrapping around."""
+        if self.preview_search_matches:
+            self.preview_current_match = (self.preview_current_match + 1) % len(self.preview_search_matches)
+
+    def prev_preview_match(self) -> None:
+        """Go back to the previous preview search match, wrapping around."""
+        if self.preview_search_matches:
+            self.preview_current_match = (self.preview_current_match - 1) % len(self.preview_search_matches)
 
 
 class ThreadSelectorTUI:
