@@ -442,9 +442,7 @@ class ThreadSelectorTUI:
         h, w = stdscr.getmaxyx()
 
         if self.show_preview and w >= 105:
-            list_width = 75
-            if w < list_width + 30:
-                list_width = max(50, w - 35)
+            list_width = max(55, min(w // 2, 140))
             preview_width = w - list_width - 1
             show_preview = True
         else:
