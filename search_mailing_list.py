@@ -329,6 +329,10 @@ class ThreadSelectorTUI:
         self.done_mids = done_mids or set()
         self.preview_mode = 'THREAD'  # 'MESSAGE' or 'THREAD'
         self.view_mode = 'SPLIT'  # 'SPLIT' or 'FULLSCREEN'
+        self.focus = 'THREAD_LIST'  # 'THREAD_LIST' or 'PREVIEW'
+        self.thread_cursor = 0  # Selected message index in thread overview
+        self.thread_scroll_offset = 0  # Scroll offset in thread overview
+        self.message_scroll_offset = 0  # Scroll offset in message body
         self._preview_cache = {}
         self._overview_cache = {}
         self._overview_loading = set()
