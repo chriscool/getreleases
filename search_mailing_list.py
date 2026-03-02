@@ -604,8 +604,9 @@ class ThreadSelectorTUI:
 
         curses.doupdate()
 
-    def _build_body_preview(self, thread: Dict[str, Any], preview_width: int, h: int) -> List[Tuple[str, int]]:
-        """Return preview lines showing a scrollable message body.
+    def _build_body_preview(self, thread: Dict[str, Any], preview_width: int,
+                            h: int) -> Tuple[List[Tuple[str, int]], bool, bool]:
+        """Return (lines, more_above, more_below) for a scrollable message body.
 
         Uses thread_cursor to select which message in the thread to show,
         and message_scroll_offset for vertical scrolling within that message.
@@ -634,13 +635,17 @@ class ThreadSelectorTUI:
         available = max(1, h - len(header) - 4)
         self.ws.message_scroll_offset = min(self.ws.message_scroll_offset,
                                             max(0, len(body_lines) - available))
-        visible = body_lines[self.ws.message_scroll_offset:self.ws.message_scroll_offset + available]
+        offset = self.ws.message_scroll_offset
+        visible = body_lines[offset:offset + available]
 
-        return header + [(line, 0) for line in visible]
+        more_above = offset > 0
+        more_below = offset + available < len(body_lines)
+        return header + [(line, 0) for line in visible], more_above, more_below
 
     def _build_thread_overview(self, messages: List[Dict[str, Any]],
-                               preview_width: int, h: int) -> List[Tuple[str, int]]:
-        """Return preview lines showing a lore-style thread overview with cursor highlight."""
+                               preview_width: int,
+                               h: int) -> Tuple[List[Tuple[str, int]], bool, bool]:
+        """Return (lines, more_above, more_below) for the thread overview."""
         available = h - 5  # Lines available for messages (below header row)
 
         # Adjust scroll offset to keep thread_cursor visible
@@ -649,10 +654,11 @@ class ThreadSelectorTUI:
         elif self.ws.thread_cursor >= self.ws.thread_scroll_offset + available:
             self.ws.thread_scroll_offset = self.ws.thread_cursor - available + 1
 
+        offset = self.ws.thread_scroll_offset
         header = f"Thread overview: {len(messages)} messages"
         lines: List[Tuple[str, int]] = [(header, 0), ("", 0)]
 
-        for idx in range(self.ws.thread_scroll_offset, min(len(messages), self.ws.thread_scroll_offset + available)):
+        for idx in range(offset, min(len(messages), offset + available)):
             msg = messages[idx]
             subject = _decode_header(msg.get('subject', '(No Subject)').strip())
             sender = _decode_header(msg.get('from', '').strip())
@@ -667,16 +673,19 @@ class ThreadSelectorTUI:
             attr = curses.A_REVERSE if idx == self.ws.thread_cursor else 0
             lines.append((self._sanitize_for_curses(entry[:preview_width-1]), attr))
 
-        return lines
+        more_above = offset > 0
+        more_below = offset + available < len(messages)
+        return lines, more_above, more_below
 
-    def _get_preview_lines(self, thread: Dict[str, Any], preview_width: int, h: int) -> List[Tuple[str, int]]:
-        """Return the lines to display in the preview pane for the given thread."""
+    def _get_preview_lines(self, thread: Dict[str, Any], preview_width: int,
+                           h: int) -> Tuple[List[Tuple[str, int]], bool, bool]:
+        """Return (lines, more_above, more_below) for the preview pane."""
         if self.preview_mode == 'MESSAGE':
             return self._build_body_preview(thread, preview_width, h)
 
         messages = self.ws.fetch_thread_overview(thread['root_mid'])
         if messages is None:
-            return [("Loading...", 0)]
+            return [("Loading...", 0)], False, False
         return self._build_thread_overview(messages, preview_width, h)
 
     def _render_fullscreen(self, stdscr, h: int, w: int) -> None:
@@ -694,11 +703,22 @@ class ThreadSelectorTUI:
         stdscr.addstr(1, 0, subject_line[:w-1])
         stdscr.addstr(2, 0, "─" * min(w - 1, 120))
 
-        preview_lines = self._get_preview_lines(current_thread, w - 2, h)
+        preview_lines, more_above, more_below = self._get_preview_lines(current_thread, w - 2, h)
         for i, (line, attr) in enumerate(preview_lines):
             try:
                 if 3 + i < h - 1:
                     stdscr.addstr(3 + i, 0, line[:w-1], attr)
+            except curses.error:
+                pass
+
+        if more_above:
+            try:
+                stdscr.addstr(3, w - 2, "▲")
+            except curses.error:
+                pass
+        if more_below:
+            try:
+                stdscr.addstr(h - 2, w - 2, "▼")
             except curses.error:
                 pass
 
@@ -803,12 +823,23 @@ class ThreadSelectorTUI:
 
         current_thread = self.ws.threads[self.ws.cursor] if self.ws.threads else None
         if show_preview and current_thread and preview_width > 10:
-            preview_lines = self._get_preview_lines(current_thread, preview_width, h)
+            preview_lines, p_more_above, p_more_below = self._get_preview_lines(current_thread, preview_width, h)
 
             for i, (line, attr) in enumerate(preview_lines):
                 try:
                     if 3 + i < h:
                         stdscr.addstr(3 + i, list_width + 1, line[:preview_width - 1], attr)
+                except curses.error:
+                    pass
+
+            if p_more_above:
+                try:
+                    stdscr.addstr(3, w - 2, "▲")
+                except curses.error:
+                    pass
+            if p_more_below:
+                try:
+                    stdscr.addstr(h - 2, w - 2, "▼")
                 except curses.error:
                     pass
 
