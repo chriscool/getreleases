@@ -643,15 +643,22 @@ class ThreadSelectorTUI:
         subject_width = max(20, list_width - fixed_width - 1)
 
         edition_prefix = f"Edition {self.edition} | " if self.edition is not None else ""
+        list_focus = self.focus == 'THREAD_LIST'
+        list_marker = "►" if list_focus else " "
         if self.searching:
             title = f"{edition_prefix}Search: {self.search_term} (Enter: done, Esc: cancel, n/p next/prev, Ctrl+F full)"
         else:
-            title = f"{edition_prefix}Select threads (? help, / search, Ctrl+F full, Space toggle, Q quit)"
-        stdscr.addstr(0, 0, title[:list_width-1])
+            title = f"{list_marker} {edition_prefix}Select threads (? help, / search, Ctrl+F full, Space toggle, Q quit)"
+        title_attr = curses.A_BOLD if list_focus else 0
+        stdscr.addstr(0, 0, title[:list_width-1], title_attr)
         if show_preview:
             stdscr.addstr(0, list_width, "│")
-            preview_label = "Thread overview (Ctrl+T/P)" if self.preview_mode == 'THREAD' else "Message preview (Ctrl+P/T)"
-            stdscr.addstr(0, list_width + 1, preview_label[:preview_width - 1])
+            preview_focus = self.focus == 'PREVIEW'
+            preview_marker = "►" if preview_focus else " "
+            mode_label = "Thread overview (Ctrl+T/P)" if self.preview_mode == 'THREAD' else "Message preview (Ctrl+P/T)"
+            preview_label = f"{preview_marker} {mode_label} (Tab: switch focus)"
+            preview_attr = curses.A_BOLD if preview_focus else 0
+            stdscr.addstr(0, list_width + 1, preview_label[:preview_width - 1], preview_attr)
 
         header = f"{'Age':<3} | {'Msgs':<4} | {'Ppl':<3} | {'Subject':<{subject_width}}"
         stdscr.addstr(1, 0, header[:list_width-1])
