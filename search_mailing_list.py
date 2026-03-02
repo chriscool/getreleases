@@ -490,23 +490,38 @@ class ThreadSelectorTUI:
         curses.doupdate()
 
     def _build_body_preview(self, thread: Dict[str, Any], preview_width: int, h: int) -> List[Tuple[str, int]]:
-        """Return preview lines showing the first email body of the thread."""
-        lines: List[Tuple[str, int]] = [
-            (f"Subject: {thread['subject'][:preview_width-2]}", 0),
-            (f"Messages: {thread['count']}", 0),
-            (f"Participants: {thread['participants']}", 0),
-            (f"Last activity: {thread['last_activity']}", 0),
-            (f"Thread ID: {thread['thread_id'][:preview_width-2]}", 0),
-            ("", 0),
+        """Return preview lines showing a scrollable message body.
+
+        Uses thread_cursor to select which message in the thread to show,
+        and message_scroll_offset for vertical scrolling within that message.
+        """
+        messages = self.fetch_thread_overview(thread['root_mid'])
+        if messages:
+            msg = messages[min(self.thread_cursor, len(messages) - 1)]
+            from_hdr = self._decode_header(msg.get('from', ''))
+            date_hdr = msg.get('date', '')
+            subject_hdr = self._decode_header(msg.get('subject', ''))
+            body_lines = [self._sanitize_for_curses(l[:preview_width-1]) for l in msg.get('body', [])]
+        else:
+            from_hdr = ''
+            date_hdr = ''
+            subject_hdr = thread['subject']
+            body_lines = [self._sanitize_for_curses(l[:preview_width-1])
+                          for l in self.fetch_email_body(thread['blob'], 10000)]
+
+        header: List[Tuple[str, int]] = [
+            (f"From:    {from_hdr[:preview_width-2]}", 0),
+            (f"Date:    {date_hdr[:preview_width-2]}", 0),
+            (f"Subject: {subject_hdr[:preview_width-2]}", 0),
+            ("─" * min(preview_width - 1, 80), 0),
         ]
 
-        body_lines = self.fetch_email_body(thread['blob'], max(h - 14, 5))
-        for line in body_lines:
-            if len(lines) >= h - 3:
-                break
-            lines.append((self._sanitize_for_curses(line[:preview_width-1]), 0))
+        available = max(1, h - len(header) - 4)
+        self.message_scroll_offset = min(self.message_scroll_offset,
+                                         max(0, len(body_lines) - available))
+        visible = body_lines[self.message_scroll_offset:self.message_scroll_offset + available]
 
-        return lines
+        return header + [(line, 0) for line in visible]
 
     @staticmethod
     def _decode_header(value: str) -> str:
