@@ -462,8 +462,7 @@ class ThreadSelectorTUI:
         for i, line in enumerate(lines):
             stdscr.addstr(start_y + i, start_x, line)
 
-        stdscr.getch()
-        self.show_help_overlay = False
+        curses.doupdate()
 
     def _build_body_preview(self, thread: Dict[str, Any], preview_width: int, h: int) -> List[str]:
         """Return preview lines showing the first email body of the thread."""
@@ -622,6 +621,9 @@ class ThreadSelectorTUI:
 
     def handle_input(self, key: int) -> Optional[List[str]]:
         """Handle key input. Returns list of selected blobs if quit, None otherwise."""
+        if self.show_help_overlay:
+            self.show_help_overlay = False
+            return None
         if key == 16:  # Ctrl+P
             self.show_preview = not self.show_preview
             return None
