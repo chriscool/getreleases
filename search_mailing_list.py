@@ -327,7 +327,7 @@ class ThreadSelectorTUI:
         self.repo_path = repo_path
         self.edition = edition
         self.done_mids = done_mids or set()
-        self.show_thread_overview = False
+        self.preview_mode = 'THREAD'  # 'MESSAGE' or 'THREAD'
         self._preview_cache = {}
         self._overview_cache = {}
         self._overview_loading = set()
@@ -447,9 +447,11 @@ class ThreadSelectorTUI:
             "  Enter       - Confirm search and jump to match",
             "  Escape      - Cancel search",
             "",
+            "Preview:",
+            "  Ctrl+P      - Message preview (toggle/show/switch)",
+            "  Ctrl+T      - Thread overview (toggle/show/switch)",
+            "",
             "Other:",
-            "  Ctrl+P      - Toggle preview window",
-            "  Ctrl+T      - Toggle body / thread overview in preview",
             "  ?           - Show this help",
             "  Q           - Quit and return selected threads",
             "",
@@ -530,7 +532,7 @@ class ThreadSelectorTUI:
 
     def _get_preview_lines(self, thread: Dict[str, Any], preview_width: int, h: int) -> List[str]:
         """Return the lines to display in the preview pane for the given thread."""
-        if not self.show_thread_overview:
+        if self.preview_mode == 'MESSAGE':
             return self._build_body_preview(thread, preview_width, h)
 
         messages = self.fetch_thread_overview(thread['root_mid'])
@@ -567,7 +569,7 @@ class ThreadSelectorTUI:
         stdscr.addstr(0, 0, title[:list_width-1])
         if show_preview:
             stdscr.addstr(0, list_width, "│")
-            preview_label = "Thread overview (Ctrl+T to toggle)" if self.show_thread_overview else "Body preview (Ctrl+T to toggle)"
+            preview_label = "Thread overview (Ctrl+T/P)" if self.preview_mode == 'THREAD' else "Message preview (Ctrl+P/T)"
             stdscr.addstr(0, list_width + 1, preview_label[:preview_width - 1])
 
         header = f"{'Age':<3} | {'Msgs':<4} | {'Ppl':<3} | {'Subject':<{subject_width}}"
@@ -624,11 +626,23 @@ class ThreadSelectorTUI:
         if self.show_help_overlay:
             self.show_help_overlay = False
             return None
-        if key == 16:  # Ctrl+P
-            self.show_preview = not self.show_preview
+        if key == 16:  # Ctrl+P - Message preview toggle
+            if self.show_preview and self.preview_mode == 'MESSAGE':
+                self.show_preview = False
+            elif self.show_preview and self.preview_mode == 'THREAD':
+                self.preview_mode = 'MESSAGE'
+            else:
+                self.show_preview = True
+                self.preview_mode = 'MESSAGE'
             return None
-        if key == 20:  # Ctrl+T
-            self.show_thread_overview = not self.show_thread_overview
+        if key == 20:  # Ctrl+T - Thread overview toggle
+            if self.show_preview and self.preview_mode == 'THREAD':
+                self.show_preview = False
+            elif self.show_preview and self.preview_mode == 'MESSAGE':
+                self.preview_mode = 'THREAD'
+            else:
+                self.show_preview = True
+                self.preview_mode = 'THREAD'
             return None
         if self.searching:
             if key in (curses.KEY_ENTER, 10, 13):
@@ -652,11 +666,11 @@ class ThreadSelectorTUI:
         else:
             if key in (curses.KEY_UP, ord('k')):
                 self.cursor = max(0, self.cursor - 1)
-                if self.show_thread_overview:
+                if self.preview_mode == 'THREAD':
                     self.fetch_thread_overview(self.threads[self.cursor]['root_mid'])
             elif key in (curses.KEY_DOWN, ord('j')):
                 self.cursor = min(len(self.threads) - 1, self.cursor + 1)
-                if self.show_thread_overview:
+                if self.preview_mode == 'THREAD':
                     self.fetch_thread_overview(self.threads[self.cursor]['root_mid'])
             elif key == ord(' '):
                 self.selected[self.cursor] = not self.selected[self.cursor]
