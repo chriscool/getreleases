@@ -523,113 +523,16 @@ class ThreadSelectorTUI:
 
     def __init__(self, threads: List[Dict[str, Any]], repo_path: Optional[str] = None,
                  edition: Optional[int] = None, done_mids: Optional[set] = None):
-        self.threads = threads
-        self.selected = [False] * len(threads)
-        self.cursor = 0
-        self.offset = 0
-        self.search_term = ""
-        self.search_matches = []
-        self.current_match_idx = -1
-        self.searching = False
+        self.ws = ThreadWorkspace(threads, repo_path, edition, done_mids)
         self.show_help_overlay = False
         self.show_preview = True
-        self.repo_path = repo_path
-        self.edition = edition
-        self.done_mids = done_mids or set()
         self.preview_mode = 'THREAD'  # 'MESSAGE' or 'THREAD'
         self.view_mode = 'SPLIT'  # 'SPLIT' or 'FULLSCREEN'
         self.focus = 'THREAD_LIST'  # 'THREAD_LIST' or 'PREVIEW'
-        self.thread_cursor = 0  # Selected message index in thread overview
-        self.thread_scroll_offset = 0  # Scroll offset in thread overview
-        self.message_scroll_offset = 0  # Scroll offset in message body
-        self._preview_cache = {}
-        self._overview_cache = {}
-        self._overview_loading = set()
-        self._fetch_done = threading.Event()
 
     def _sanitize_for_curses(self, text: str) -> str:
         """Remove non-printable and control characters for curses display."""
         return ''.join(c if 32 <= ord(c) < 127 else '?' for c in text)
-
-    def fetch_email_body(self, blob_id: str, max_lines: int = 20) -> List[str]:
-        """Fetch the email body using git show.
-
-        Args:
-            blob_id: The blob ID to fetch
-            max_lines: Maximum number of body lines to return
-        """
-        cache_key = f"{blob_id}:{max_lines}"
-        if cache_key in self._preview_cache:
-            return self._preview_cache[cache_key]
-
-        if not self.repo_path:
-            return []
-
-        try:
-            cmd = ["git", "show", blob_id]
-            cwd = None
-            if os.path.isdir(self.repo_path):
-                v2_all = os.path.join(self.repo_path, "all.git")
-                if os.path.isdir(v2_all):
-                    cwd = v2_all
-                else:
-                    cwd = self.repo_path
-
-            result = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, errors='replace', timeout=10)
-
-            lines = result.stdout.splitlines()
-
-            body_lines = []
-            header_ended = False
-
-            for idx, line in enumerate(lines):
-                if not header_ended:
-                    if line == '':
-                        next_line = lines[idx + 1] if idx + 1 < len(lines) else ''
-                        if not next_line or next_line[0] not in ' \t':
-                            header_ended = True
-                    if not header_ended:
-                        continue
-
-                body_lines.append(line)
-
-            self._preview_cache[cache_key] = body_lines[:max_lines]
-            return self._preview_cache[cache_key]
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
-            return []
-
-    def fetch_thread_overview(self, root_mid: str) -> Optional[List[Dict[str, Any]]]:
-        """Fetch the full thread messages for the given root Message-ID.
-
-        Returns the list of message dicts if available, or None if still loading.
-        Fetching is done in a background thread; the result is cached.
-        """
-        if root_mid in self._overview_cache:
-            return self._overview_cache[root_mid]
-
-        if root_mid in self._overview_loading:
-            return None
-
-        self._overview_loading.add(root_mid)
-
-        def _fetch():
-            try:
-                messages = git_ml_converter.fetch_lei_thread(root_mid, self.repo_path, quiet=True)
-            except Exception:
-                messages = []
-            self._overview_cache[root_mid] = messages
-            self._overview_loading.discard(root_mid)
-            self._fetch_done.set()
-
-        threading.Thread(target=_fetch, daemon=True).start()
-        return None
-
-    def find_matches(self, term: str) -> List[int]:
-        """Find thread indices matching the search term."""
-        if not term:
-            return []
-        term_lower = term.lower()
-        return [i for i, t in enumerate(self.threads) if term_lower in t['subject'].lower()]
 
     def _toggle_preview_mode(self, mode: str) -> None:
         """Toggle preview visibility and mode for the given mode ('MESSAGE' or 'THREAD').
@@ -707,9 +610,9 @@ class ThreadSelectorTUI:
         Uses thread_cursor to select which message in the thread to show,
         and message_scroll_offset for vertical scrolling within that message.
         """
-        messages = self.fetch_thread_overview(thread['root_mid'])
+        messages = self.ws.fetch_thread_overview(thread['root_mid'])
         if messages:
-            msg = messages[min(self.thread_cursor, len(messages) - 1)]
+            msg = messages[min(self.ws.thread_cursor, len(messages) - 1)]
             from_hdr = _decode_header(msg.get('from', ''))
             date_hdr = msg.get('date', '')
             subject_hdr = _decode_header(msg.get('subject', ''))
@@ -719,7 +622,7 @@ class ThreadSelectorTUI:
             date_hdr = ''
             subject_hdr = thread['subject']
             body_lines = [self._sanitize_for_curses(l[:preview_width-1])
-                          for l in self.fetch_email_body(thread['blob'], 10000)]
+                          for l in self.ws.fetch_email_body(thread['blob'], 10000)]
 
         header: List[Tuple[str, int]] = [
             (f"From:    {from_hdr[:preview_width-2]}", 0),
@@ -729,9 +632,9 @@ class ThreadSelectorTUI:
         ]
 
         available = max(1, h - len(header) - 4)
-        self.message_scroll_offset = min(self.message_scroll_offset,
-                                         max(0, len(body_lines) - available))
-        visible = body_lines[self.message_scroll_offset:self.message_scroll_offset + available]
+        self.ws.message_scroll_offset = min(self.ws.message_scroll_offset,
+                                            max(0, len(body_lines) - available))
+        visible = body_lines[self.ws.message_scroll_offset:self.ws.message_scroll_offset + available]
 
         return header + [(line, 0) for line in visible]
 
@@ -741,15 +644,15 @@ class ThreadSelectorTUI:
         available = h - 5  # Lines available for messages (below header row)
 
         # Adjust scroll offset to keep thread_cursor visible
-        if self.thread_cursor < self.thread_scroll_offset:
-            self.thread_scroll_offset = self.thread_cursor
-        elif self.thread_cursor >= self.thread_scroll_offset + available:
-            self.thread_scroll_offset = self.thread_cursor - available + 1
+        if self.ws.thread_cursor < self.ws.thread_scroll_offset:
+            self.ws.thread_scroll_offset = self.ws.thread_cursor
+        elif self.ws.thread_cursor >= self.ws.thread_scroll_offset + available:
+            self.ws.thread_scroll_offset = self.ws.thread_cursor - available + 1
 
         header = f"Thread overview: {len(messages)} messages"
         lines: List[Tuple[str, int]] = [(header, 0), ("", 0)]
 
-        for idx in range(self.thread_scroll_offset, min(len(messages), self.thread_scroll_offset + available)):
+        for idx in range(self.ws.thread_scroll_offset, min(len(messages), self.ws.thread_scroll_offset + available)):
             msg = messages[idx]
             subject = _decode_header(msg.get('subject', '(No Subject)').strip())
             sender = _decode_header(msg.get('from', '').strip())
@@ -759,9 +662,9 @@ class ThreadSelectorTUI:
             depth = len(refs.split()) if refs.strip() else 0
             indent = '` ' * depth
 
-            cursor_marker = '►' if idx == self.thread_cursor else ' '
+            cursor_marker = '►' if idx == self.ws.thread_cursor else ' '
             entry = f"{cursor_marker} {date_fmt} {indent}{subject} {sender}"
-            attr = curses.A_REVERSE if idx == self.thread_cursor else 0
+            attr = curses.A_REVERSE if idx == self.ws.thread_cursor else 0
             lines.append((self._sanitize_for_curses(entry[:preview_width-1]), attr))
 
         return lines
@@ -771,18 +674,18 @@ class ThreadSelectorTUI:
         if self.preview_mode == 'MESSAGE':
             return self._build_body_preview(thread, preview_width, h)
 
-        messages = self.fetch_thread_overview(thread['root_mid'])
+        messages = self.ws.fetch_thread_overview(thread['root_mid'])
         if messages is None:
             return [("Loading...", 0)]
         return self._build_thread_overview(messages, preview_width, h)
 
     def _render_fullscreen(self, stdscr, h: int, w: int) -> None:
         """Render full-screen mode: preview/overview takes entire terminal."""
-        current_thread = self.threads[self.cursor] if self.threads else None
+        current_thread = self.ws.threads[self.ws.cursor] if self.ws.threads else None
         if not current_thread:
             return
 
-        edition_prefix = f"Edition {self.edition} | " if self.edition is not None else ""
+        edition_prefix = f"Edition {self.ws.edition} | " if self.ws.edition is not None else ""
         mode_name = "Thread Overview" if self.preview_mode == 'THREAD' else "Message Preview"
         title = f"{edition_prefix}{mode_name} - Full Screen (Ctrl+F: exit, Ctrl+P/T: switch mode)"
         stdscr.addstr(0, 0, title[:w-1], curses.A_BOLD)
@@ -799,7 +702,7 @@ class ThreadSelectorTUI:
             except curses.error:
                 pass
 
-        status = f"Selected: {sum(self.selected)}/{len(self.threads)} | Thread {self.cursor + 1}/{len(self.threads)}"
+        status = f"Selected: {sum(self.ws.selected)}/{len(self.ws.threads)} | Thread {self.ws.cursor + 1}/{len(self.ws.threads)}"
         stdscr.addstr(h-1, 0, status[:w-1])
 
     def render(self, stdscr):
@@ -831,11 +734,11 @@ class ThreadSelectorTUI:
         fixed_width = 3 + 4 + 3 + 12 + 2
         subject_width = max(20, list_width - fixed_width - 1)
 
-        edition_prefix = f"Edition {self.edition} | " if self.edition is not None else ""
+        edition_prefix = f"Edition {self.ws.edition} | " if self.ws.edition is not None else ""
         list_focus = self.focus == 'THREAD_LIST'
         list_marker = "►" if list_focus else " "
-        if self.searching:
-            title = f"{edition_prefix}Search: {self.search_term} (Enter: done, Esc: cancel, n/p next/prev, Ctrl+F full)"
+        if self.ws.searching:
+            title = f"{edition_prefix}Search: {self.ws.search_term} (Enter: done, Esc: cancel, n/p next/prev, Ctrl+F full)"
         else:
             title = f"{list_marker} {edition_prefix}Select threads (? help, / search, Ctrl+F full, Space toggle, Q quit)"
         title_attr = curses.A_BOLD if list_focus else 0
@@ -858,32 +761,32 @@ class ThreadSelectorTUI:
             stdscr.addstr(2, list_width, "├" + "─" * (preview_width - 1))
 
         visible_rows = h - 4
-        if self.offset > self.cursor:
-            self.offset = self.cursor
-        elif self.cursor >= self.offset + visible_rows:
-            self.offset = self.cursor - visible_rows + 1
+        if self.ws.offset > self.ws.cursor:
+            self.ws.offset = self.ws.cursor
+        elif self.ws.cursor >= self.ws.offset + visible_rows:
+            self.ws.offset = self.ws.cursor - visible_rows + 1
 
-        for i in range(self.offset, min(len(self.threads), self.offset + visible_rows)):
-            row = i - self.offset + 3
+        for i in range(self.ws.offset, min(len(self.ws.threads), self.ws.offset + visible_rows)):
+            row = i - self.ws.offset + 3
             if row >= h:
                 break
 
-            t = self.threads[i]
-            if t['root_mid'] in self.done_mids:
+            t = self.ws.threads[i]
+            if t['root_mid'] in self.ws.done_mids:
                 marker = "[D]"
-            elif self.selected[i]:
+            elif self.ws.selected[i]:
                 marker = "[X]"
             else:
                 marker = "[ ]"
             subject = t['subject'][:subject_width-3] + "..." if len(t['subject']) > subject_width else t['subject']
             line = f"{t['age_days']:<3} | {t['count']:<4} | {t['participants']:<3} | {marker} {subject:<{subject_width}}"
 
-            if i == self.cursor:
+            if i == self.ws.cursor:
                 stdscr.addstr(row, 0, line[:list_width-1], curses.A_REVERSE)
             else:
                 stdscr.addstr(row, 0, line[:list_width-1])
 
-        current_thread = self.threads[self.cursor] if self.threads else None
+        current_thread = self.ws.threads[self.ws.cursor] if self.ws.threads else None
         if show_preview and current_thread and preview_width > 10:
             preview_lines = self._get_preview_lines(current_thread, preview_width, h)
 
@@ -894,86 +797,62 @@ class ThreadSelectorTUI:
                 except curses.error:
                     pass
 
-        if self.search_matches:
-            stdscr.addstr(h-2, 0, f"Match: {self.current_match_idx + 1}/{len(self.search_matches)}"[:list_width-1])
-        stdscr.addstr(h-1, 0, f"Selected: {sum(self.selected)}/{len(self.threads)}"[:list_width-1])
+        if self.ws.search_matches:
+            stdscr.addstr(h-2, 0, f"Match: {self.ws.current_match_idx + 1}/{len(self.ws.search_matches)}"[:list_width-1])
+        stdscr.addstr(h-1, 0, f"Selected: {sum(self.ws.selected)}/{len(self.ws.threads)}"[:list_width-1])
 
     def _handle_input_search(self, key: int) -> None:
         """Handle key input while in search mode."""
         if key in (curses.KEY_ENTER, 10, 13):
-            self.searching = False
-            if self.search_matches:
-                self.cursor = self.search_matches[self.current_match_idx]
+            self.ws.confirm_search()
         elif key == 27:  # Escape
-            self.searching = False
-            self.search_term = ""
-            self.search_matches = []
-            self.current_match_idx = -1
+            self.ws.cancel_search()
         elif key in (curses.KEY_BACKSPACE, 127):
-            self.search_term = self.search_term[:-1]
-            self.search_matches = self.find_matches(self.search_term)
-            self.current_match_idx = 0 if self.search_matches else -1
+            self.ws.update_search(self.ws.search_term[:-1])
         elif 32 <= key <= 126:
-            self.search_term += chr(key)
-            self.search_matches = self.find_matches(self.search_term)
-            self.current_match_idx = 0 if self.search_matches else -1
+            self.ws.update_search(self.ws.search_term + chr(key))
 
     def _handle_input_thread_list(self, key: int) -> Optional[List[str]]:
         """Handle key input when focus is on the thread list."""
         if key in (curses.KEY_UP, ord('k')):
-            self.cursor = max(0, self.cursor - 1)
-            self.thread_cursor = 0
-            self.thread_scroll_offset = 0
-            self.message_scroll_offset = 0
+            self.ws.move_cursor(-1)
             if self.preview_mode == 'THREAD':
-                self.fetch_thread_overview(self.threads[self.cursor]['root_mid'])
+                self.ws.fetch_thread_overview(self.ws.threads[self.ws.cursor]['root_mid'])
         elif key in (curses.KEY_DOWN, ord('j')):
-            self.cursor = min(len(self.threads) - 1, self.cursor + 1)
-            self.thread_cursor = 0
-            self.thread_scroll_offset = 0
-            self.message_scroll_offset = 0
+            self.ws.move_cursor(+1)
             if self.preview_mode == 'THREAD':
-                self.fetch_thread_overview(self.threads[self.cursor]['root_mid'])
+                self.ws.fetch_thread_overview(self.ws.threads[self.ws.cursor]['root_mid'])
         elif key == ord(' '):
-            self.selected[self.cursor] = not self.selected[self.cursor]
+            self.ws.toggle_selection()
         elif key in (ord('q'), ord('Q')):
-            return [self.threads[i]['root_mid'] for i in range(len(self.threads)) if self.selected[i]]
+            return self.ws.get_selected_mids()
         elif key == ord('?'):
             self.show_help_overlay = True
         elif key == ord('a'):
-            all_selected = all(self.selected)
-            self.selected = [not all_selected] * len(self.threads)
+            self.ws.select_all()
         elif key == ord('/'):
-            self.searching = True
-            self.search_term = ""
-            self.search_matches = []
-            self.current_match_idx = -1
+            self.ws.start_search()
         elif key == ord('n'):
-            if self.search_matches:
-                self.current_match_idx = (self.current_match_idx + 1) % len(self.search_matches)
-                self.cursor = self.search_matches[self.current_match_idx]
+            self.ws.next_match()
         elif key == ord('p'):
-            if self.search_matches:
-                self.current_match_idx = (self.current_match_idx - 1) % len(self.search_matches)
-                self.cursor = self.search_matches[self.current_match_idx]
+            self.ws.prev_match()
         return None
 
     def _handle_input_preview(self, key: int) -> Optional[List[str]]:
         """Handle key input when focus is on the preview pane."""
-        messages = self.fetch_thread_overview(self.threads[self.cursor]['root_mid'])
+        messages = self.ws.fetch_thread_overview(self.ws.threads[self.ws.cursor]['root_mid'])
         msg_count = len(messages) if messages else 0
 
         if self.preview_mode == 'THREAD':
             if key in (curses.KEY_UP, ord('k')):
-                self.thread_cursor = max(0, self.thread_cursor - 1)
-                self.thread_scroll_offset = min(self.thread_scroll_offset, self.thread_cursor)
+                self.ws.move_thread_cursor(-1, msg_count)
             elif key in (curses.KEY_DOWN, ord('j')):
-                self.thread_cursor = min(max(0, msg_count - 1), self.thread_cursor + 1)
+                self.ws.move_thread_cursor(+1, msg_count)
         elif self.preview_mode == 'MESSAGE':
             if key in (curses.KEY_UP, ord('k')):
-                self.message_scroll_offset = max(0, self.message_scroll_offset - 1)
+                self.ws.scroll_message(-1)
             elif key in (curses.KEY_DOWN, ord('j')):
-                self.message_scroll_offset += 1
+                self.ws.scroll_message(+1)
 
         if key == 9:  # Tab - return focus to thread list (split-pane only)
             self.focus = 'THREAD_LIST'
@@ -984,7 +863,7 @@ class ThreadSelectorTUI:
             else:
                 self.focus = 'THREAD_LIST'
         elif key in (ord('q'), ord('Q')):
-            return [self.threads[i]['root_mid'] for i in range(len(self.threads)) if self.selected[i]]
+            return self.ws.get_selected_mids()
         return None
 
     def handle_input(self, key: int) -> Optional[List[str]]:
@@ -994,7 +873,7 @@ class ThreadSelectorTUI:
             return None
         if key == 16:  # Ctrl+P - Message preview toggle
             self._toggle_preview_mode('MESSAGE')
-            self.message_scroll_offset = 0
+            self.ws.message_scroll_offset = 0
             return None
         if key == 20:  # Ctrl+T - Thread overview toggle
             self._toggle_preview_mode('THREAD')
@@ -1012,7 +891,7 @@ class ThreadSelectorTUI:
             if self.view_mode == 'SPLIT' and self.show_preview:
                 self.focus = 'PREVIEW' if self.focus == 'THREAD_LIST' else 'THREAD_LIST'
             return None
-        if self.searching:
+        if self.ws.searching:
             self._handle_input_search(key)
             return None
         if self.view_mode == 'FULLSCREEN' or self.focus == 'PREVIEW':
@@ -1021,7 +900,7 @@ class ThreadSelectorTUI:
 
     def run(self) -> List[str]:
         """Main entry point for the TUI."""
-        if not self.threads:
+        if not self.ws.threads:
             return []
 
         def curses_main(stdscr):
@@ -1031,12 +910,8 @@ class ThreadSelectorTUI:
                 self.render(stdscr)
                 curses.doupdate()
 
-                fetch_done = self._fetch_done.is_set()
-                loading = bool(self._overview_loading)
-
-                if fetch_done:
-                    self._fetch_done.clear()
-                if fetch_done or loading:
+                fetch_done = self.ws.consume_fetch_done()
+                if fetch_done or self.ws.is_loading:
                     stdscr.timeout(200)
                 else:
                     stdscr.timeout(-1)
