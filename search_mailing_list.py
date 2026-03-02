@@ -452,6 +452,71 @@ class ThreadWorkspace:
         """Return the root Message-IDs of all selected threads."""
         return [self.threads[i]['root_mid'] for i in range(len(self.threads)) if self.selected[i]]
 
+    def move_cursor(self, delta: int) -> None:
+        """Move the thread list cursor by delta, clamped to valid range.
+
+        Resets in-thread navigation state since we are now on a different thread.
+        """
+        self.cursor = max(0, min(len(self.threads) - 1, self.cursor + delta))
+        self.thread_cursor = 0
+        self.thread_scroll_offset = 0
+        self.message_scroll_offset = 0
+
+    def move_thread_cursor(self, delta: int, msg_count: int) -> None:
+        """Move the message cursor within the thread overview by delta."""
+        self.thread_cursor = max(0, min(max(0, msg_count - 1), self.thread_cursor + delta))
+
+    def scroll_message(self, delta: int) -> None:
+        """Scroll the message body by delta lines (upper clamping at render time)."""
+        self.message_scroll_offset = max(0, self.message_scroll_offset + delta)
+
+    def toggle_selection(self) -> None:
+        """Toggle selection state of the thread under the cursor."""
+        self.selected[self.cursor] = not self.selected[self.cursor]
+
+    def select_all(self) -> None:
+        """Select all threads, or deselect all if all are already selected."""
+        all_selected = all(self.selected)
+        self.selected = [not all_selected] * len(self.threads)
+
+    def start_search(self) -> None:
+        """Enter search mode with an empty term."""
+        self.searching = True
+        self.search_term = ""
+        self.search_matches = []
+        self.current_match_idx = -1
+
+    def update_search(self, term: str) -> None:
+        """Update the search term and recompute matches."""
+        self.search_term = term
+        self.search_matches = self.find_matches(term)
+        self.current_match_idx = 0 if self.search_matches else -1
+
+    def confirm_search(self) -> None:
+        """Exit search mode, keeping the cursor on the current match."""
+        self.searching = False
+        if self.search_matches:
+            self.cursor = self.search_matches[self.current_match_idx]
+
+    def cancel_search(self) -> None:
+        """Exit search mode, clearing the search term and matches."""
+        self.searching = False
+        self.search_term = ""
+        self.search_matches = []
+        self.current_match_idx = -1
+
+    def next_match(self) -> None:
+        """Advance to the next search match, wrapping around."""
+        if self.search_matches:
+            self.current_match_idx = (self.current_match_idx + 1) % len(self.search_matches)
+            self.cursor = self.search_matches[self.current_match_idx]
+
+    def prev_match(self) -> None:
+        """Go back to the previous search match, wrapping around."""
+        if self.search_matches:
+            self.current_match_idx = (self.current_match_idx - 1) % len(self.search_matches)
+            self.cursor = self.search_matches[self.current_match_idx]
+
 
 class ThreadSelectorTUI:
     """Manages the curses-based thread selection interface."""
