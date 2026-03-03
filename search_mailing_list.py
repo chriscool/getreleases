@@ -725,6 +725,7 @@ class ThreadSelectorTUI:
         matches = set(self.ws.preview_search_matches)
         current = (self.ws.preview_search_matches[self.ws.preview_current_match]
                    if self.ws.preview_current_match >= 0 else -1)
+        search_active = bool(matches)
 
         for idx in range(offset, min(len(messages), offset + available)):
             msg = messages[idx]
@@ -736,13 +737,14 @@ class ThreadSelectorTUI:
             depth = len(refs.split()) if refs.strip() else 0
             indent = '` ' * depth
 
-            cursor_marker = '►' if idx == self.ws.thread_cursor else ' '
+            show_cursor = idx == self.ws.thread_cursor and not search_active
+            cursor_marker = '►' if show_cursor else ' '
             entry = f"{cursor_marker} {date_fmt} {indent}{subject} {sender}"
             if idx == current:
                 attr = curses.A_BOLD | curses.A_REVERSE
             elif idx in matches:
                 attr = curses.A_BOLD
-            elif idx == self.ws.thread_cursor:
+            elif idx == self.ws.thread_cursor and not search_active:
                 attr = curses.A_REVERSE
             else:
                 attr = 0
