@@ -750,6 +750,7 @@ RELEASES = {
     'b4': GitHubTags('mricon/b4', r'^v(\d+\.\d+\.\d+)$'),
     'git-filter-repo': GitHubTags('newren/git-filter-repo', r'^v(\d+\.\d+\.\d+)$'),
     'git-branchless': GitHubTags('arxanas/git-branchless', r'^v(\d+\.\d+\.\d+)$'),
+    'git-bug': GitHubTags('git-bug/git-bug', r'^v?(\d+\.\d+\.\d+)$'),
 }
 
 if ARGS.list:
