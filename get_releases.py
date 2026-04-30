@@ -741,6 +741,7 @@ RELEASES = {
                                     releases={'number': ['h3']},
                                     date={'elt': ['div', {'class': 'release-date'}],
                                           'fmt': ['%d %B %Y', '%d %b %Y']}),
+    'delta': GitHubTags('dandavison/delta', r'^(\d+\.\d+\.\d+)$'),
     'Kinetic Merge': GitHubTags('sageserpent-open/kineticMerge', r'^v(\d\.\d+\.\d+)$'),
     'git-credential-azure': GitHubTags('hickford/git-credential-azure', r'^v(\d\.\d+\.\d+)$'),
     'git-credential-oauth': GitHubTags('hickford/git-credential-oauth', r'^v(\d\.\d+\.\d+)$'),
