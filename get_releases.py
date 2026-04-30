@@ -635,6 +635,57 @@ class GitLabReleases(Releases):
                 self._releases[version] = release_url
 
 
+class PublicInboxNews(Releases):
+    """
+    Parse the upstream NEWS file of public-inbox. The file lists each
+    release with a heading of the form
+
+        public-inbox X.Y.Z - YYYY-MM-DD HH:MM UTC
+        =========================================
+
+    followed by free-form release notes. A 'Link: <url>' line in each
+    section gives the canonical mailing-list announcement URL, which we
+    use as the per-release href. Pre-release tags like 1.1.0-pre1 are
+    skipped.
+    """
+
+    URL = 'https://public-inbox.org/NEWS'
+    HEADING_RE = re.compile(
+        r'^public-inbox (\d+\.\d+\.\d+)(?!-) - (\d{4}-\d{2}-\d{2})',
+        re.MULTILINE)
+    LINK_RE = re.compile(r'^Link: (\S+)', re.MULTILINE)
+
+    def __init__(self):
+        Releases.__init__(self, self.URL)
+
+    def get_releases(self):
+        print('> Requesting {}'.format(self.URL))
+        try:
+            resp = requests.get(self.URL, timeout=30,
+                                headers={'User-Agent': 'Mozilla/5.0'})
+        except requests.exceptions.RequestException as e:
+            print('Error fetching {}: {}'.format(self.URL, e))
+            return
+        if not resp.ok:
+            print('Error {} fetching {}'.format(resp.status_code, self.URL))
+            return
+
+        text = resp.text
+        headings = list(self.HEADING_RE.finditer(text))
+        for i, m in enumerate(headings):
+            version = m.group(1)
+            date = get_date(m.group(2), '%Y-%m-%d')
+            if not date:
+                continue
+            if date < self._last_date:
+                break
+            section_end = (headings[i + 1].start()
+                           if i + 1 < len(headings) else len(text))
+            link_m = self.LINK_RE.search(text, m.end(), section_end)
+            href = link_m.group(1) if link_m else self.URL
+            self._releases[version] = href
+
+
 class GitHubReleases(Releases):
     """
     Get releases from the GitHub Releases API.
@@ -701,6 +752,7 @@ RELEASES = {
                                         date={'elt': ['small', {'class': 'release-date'}], 'fmt': '%B %d, %Y'}),
     'GitLab': GitLabReleases(num_majors=2, include_patches=True),
     'Gitea': GitHubTags('go-gitea/gitea', r'^v(\d+\.\d+\.\d+)$'),
+    'public-inbox': PublicInboxNews(),
     'Bitbucket Data Center': HtmlFlatPage('https://confluence.atlassian.com/bitbucketserver/release-notes-872139866.html',
                                           pattern=r'(\d+\.\d+)',
                                           releases={'number': ['h2']},
