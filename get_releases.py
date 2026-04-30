@@ -749,6 +749,7 @@ RELEASES = {
     'git-lfs': GitHubTags('git-lfs/git-lfs', r'^v(\d+\.\d+\.\d+)$'),
     'b4': GitHubTags('mricon/b4', r'^v(\d+\.\d+\.\d+)$'),
     'git-filter-repo': GitHubTags('newren/git-filter-repo', r'^v(\d+\.\d+\.\d+)$'),
+    'git-branchless': GitHubTags('arxanas/git-branchless', r'^v(\d+\.\d+\.\d+)$'),
 }
 
 if ARGS.list:
