@@ -731,6 +731,7 @@ RELEASES = {
                                        'fmt': ['%d-%b-%Y', '%d-%B-%Y']}),
     'tig': GitHubTags('jonas/tig', r'^tig-(\d\.\d+\.\d+)$'),
     'lazygit': GitHubTags('jesseduffield/lazygit', r'^v(\d+\.\d+\.\d+)$'),
+    'gitui': GitHubTags('gitui-org/gitui', r'^v(\d+\.\d+\.\d+)$'),
     'Garden': GitHubTags('garden-rs/garden', r'^v(\d\.\d+\.\d+)$'),
     'Git Cola': GitHubTags('git-cola/git-cola', r'^v(\d\.\d+\.\d+)$'),
     'GitButler': GitHubTags('gitbutlerapp/gitbutler', r'^release/(\d\.\d+\.\d+)$'),
