@@ -700,6 +700,7 @@ RELEASES = {
                                         parent=['h3'],
                                         date={'elt': ['small', {'class': 'release-date'}], 'fmt': '%B %d, %Y'}),
     'GitLab': GitLabReleases(num_majors=2, include_patches=True),
+    'Gitea': GitHubTags('go-gitea/gitea', r'^v(\d+\.\d+\.\d+)$'),
     'Bitbucket Data Center': HtmlFlatPage('https://confluence.atlassian.com/bitbucketserver/release-notes-872139866.html',
                                           pattern=r'(\d+\.\d+)',
                                           releases={'number': ['h2']},
