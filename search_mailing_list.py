@@ -718,16 +718,19 @@ class ThreadSelectorTUI:
             "  j / Down    - Move cursor down",
             "  Space       - Toggle selection of current thread",
             "  a           - Toggle select all / deselect all",
+            "  Enter       - View highlighted message of preview thread overview",
             "  /           - Search thread subjects",
             "  n / p       - Next / previous search match",
             "",
             "Preview Pane (when preview is focused or full-screen):",
             "  k / Up      - Scroll up (message body) or move up (thread overview)",
             "  j / Down    - Scroll down (message body) or move down (thread overview)",
+            "  Enter       - View selected message (when in thread overview)",
+            "  Escape      - Back to thread overview (when viewing a message)",
+            "              or cancel preview search (or return focus to thread list)",
             "  /           - Search within preview (subjects or message body)",
             "  n / p       - Next / previous preview search match",
-            "  Escape      - Cancel preview search (or return focus to thread list)",
-            "  Ctrl+P      - View selected message (when in thread overview)",
+            "  Ctrl+P      - View selected message (alternative; toggles)",
             "",
             "Preview Modes:",
             "  Ctrl+P      - Message preview (toggle/show/switch)",
@@ -904,7 +907,11 @@ class ThreadSelectorTUI:
             idx = self.ws.preview_current_match + 1 if n else 0
             title = f"{edition_prefix}{mode_name} - Search: {self.ws.preview_search_term}  [{idx}/{n}]  n/p: match  Esc: cancel"
         else:
-            title = f"{edition_prefix}{mode_name} - Full Screen (Ctrl+F: exit, Ctrl+P/T: switch, /: search)"
+            if self.preview_mode == 'THREAD':
+                hint = "Enter: view msg, Ctrl+F: exit, Ctrl+P/T: switch, /: search"
+            else:
+                hint = "Esc: back, Ctrl+F: exit, Ctrl+P/T: switch, /: search"
+            title = f"{edition_prefix}{mode_name} - Full Screen ({hint})"
         stdscr.addstr(0, 0, title[:w-1], curses.A_BOLD)
 
         subject_line = f"Thread: {current_thread['subject']}"
@@ -980,7 +987,10 @@ class ThreadSelectorTUI:
                 idx = self.ws.preview_current_match + 1 if n else 0
                 preview_label = f"{preview_marker} Search: {self.ws.preview_search_term}  [{idx}/{n}]  n/p: match  Esc: cancel"
             else:
-                mode_label = "Thread overview (Ctrl+T/P)" if self.preview_mode == 'THREAD' else "Message preview (Ctrl+P/T)"
+                if self.preview_mode == 'THREAD':
+                    mode_label = "Thread overview (Enter: view msg, Ctrl+T/P)"
+                else:
+                    mode_label = "Message preview (Esc: back, Ctrl+P/T)"
                 preview_label = f"{preview_marker} {mode_label} (Tab: focus, /: search)"
             preview_attr = curses.A_BOLD if preview_focus else 0
             stdscr.addstr(0, list_width + 1, preview_label[:preview_width - 1], preview_attr)
@@ -1095,6 +1105,14 @@ class ThreadSelectorTUI:
             self.ws.next_match()
         elif key == ord('p'):
             self.ws.prev_match()
+        elif key in (curses.KEY_ENTER, 10, 13):
+            # Enter: show the message currently highlighted in the
+            # thread-overview preview, and shift focus into it so that
+            # Esc/scroll work as expected.
+            if self.show_preview and self.preview_mode == 'THREAD':
+                self.preview_mode = 'MESSAGE'
+                self.ws.message_scroll_offset = 0
+                self.focus = 'PREVIEW'
         return None
 
     def _handle_input_preview_search(self, key: int) -> None:
@@ -1136,10 +1154,20 @@ class ThreadSelectorTUI:
             self.ws.next_preview_match()
         elif key == ord('p'):
             self.ws.prev_preview_match()
+        elif key in (curses.KEY_ENTER, 10, 13):
+            # Enter inside the preview: switch from thread overview to
+            # the highlighted message.
+            if self.preview_mode == 'THREAD':
+                self.preview_mode = 'MESSAGE'
+                self.ws.message_scroll_offset = 0
         elif key == 9:  # Tab - return focus to thread list (split-pane only)
             self.focus = 'THREAD_LIST'
         elif key == 27:  # Escape
-            if self.view_mode == 'FULLSCREEN':
+            if self.preview_mode == 'MESSAGE':
+                # Esc out of MESSAGE goes back to THREAD overview.
+                # Stay in whatever view_mode and focus we were in.
+                self.preview_mode = 'THREAD'
+            elif self.view_mode == 'FULLSCREEN':
                 self.view_mode = 'SPLIT'
                 self.focus = 'THREAD_LIST'
             else:
