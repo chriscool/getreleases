@@ -47,7 +47,7 @@ For more information, see:
 import argparse
 import datetime
 import re
-from urllib.parse import urljoin
+from urllib.parse import urljoin, quote_plus
 import requests
 
 from bs4 import BeautifulSoup
@@ -388,6 +388,253 @@ class MultiReleases(Releases):
             return ''
         return result + '\n'
 
+class GitLabTags(Releases):
+    """
+    Get releases from a GitLab project's tags via the REST API.
+
+    Mirrors the interface of GitHubTags. For public projects, no token is
+    required. The first capture group in `regex` is the version; if a second
+    capture group is present, it is appended in parentheses (matching
+    GitHubTags' two-group convention).
+    """
+
+    def __init__(self, project, regex,
+                 base_url='https://gitlab.com',
+                 url='', replace_url=False, token=None):
+        Releases.__init__(self, url)
+        self._project = project
+        self._regex = re.compile(regex)
+        self._base_url = base_url.rstrip('/')
+        self._replace_url = replace_url
+        self._token = token
+
+        encoded = quote_plus(project)
+        self._api_url = '{}/api/v4/projects/{}/repository/tags'.format(self._base_url, encoded)
+        self._tag_url = '{}/{}/-/tags/'.format(self._base_url, project)
+
+    def _headers(self):
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        if self._token:
+            headers['PRIVATE-TOKEN'] = self._token
+        return headers
+
+    def _iter_tags(self, max_pages=5, per_page=100):
+        params = {'per_page': per_page, 'order_by': 'updated', 'sort': 'desc'}
+        for _ in range(max_pages):
+            try:
+                resp = requests.get(self._api_url, params=params,
+                                    headers=self._headers(), timeout=30)
+            except requests.exceptions.RequestException as e:
+                print('Error querying GitLab API: {}'.format(e))
+                return
+            if not resp.ok:
+                print('Error {} querying GitLab API for {}'.format(
+                    resp.status_code, self._project))
+                return
+            for tag in resp.json():
+                yield tag
+            next_page = resp.headers.get('X-Next-Page')
+            if not next_page:
+                return
+            params = {'per_page': per_page, 'page': next_page,
+                      'order_by': 'updated', 'sort': 'desc'}
+
+    def date_map(self, since=None):
+        """Return {version: date} from matching tags. Stops at the first tag
+        older than `since` (since tags are returned newest-first)."""
+        result = {}
+        for tag in self._iter_tags():
+            m = self._regex.match(tag['name'])
+            if not m:
+                continue
+            committed = (tag.get('commit') or {}).get('committed_date', '')
+            if not committed:
+                continue
+            date = get_date(committed[:10], '%Y-%m-%d')
+            if not date:
+                continue
+            if since and date < since:
+                break
+            result[m.group(1)] = date
+        return result
+
+    def get_releases(self):
+        print('> Getting releases from GitLab project: {}'.format(self._project))
+        for tag in self._iter_tags():
+            self._print_debug('tag: {}'.format(tag['name']))
+            m = self._regex.match(tag['name'])
+            self._print_debug('tag_name: {}'.format(m))
+            if not m:
+                continue
+            committed = (tag.get('commit') or {}).get('committed_date', '')
+            if committed and self._last_date:
+                date = get_date(committed[:10], '%Y-%m-%d')
+                if date and date < self._last_date:
+                    break
+            try:
+                version = m.group(1) + '(' + m.group(2) + ')'
+            except IndexError:
+                version = m.group(1)
+            self._releases[version] = self._tag_url + tag['name']
+
+
+class GitLabReleases(Releases):
+    BASE_URL = 'https://docs.gitlab.com'
+    INDEX_URL = BASE_URL + '/releases/'
+    DATE_RE = re.compile(r'On ([A-Z][a-z]+ \d{1,2}, \d{4}),')
+    TAGS_PROJECT = 'gitlab-org/gitlab'
+    TAGS_REGEX = r'^v(\d+\.\d+\.\d+)(?:-ee)?$'
+    TAG_FUDGE_DAYS = 7
+    MAJOR_HREF_RE = re.compile(r'^/releases/(\d+)/$')
+    PATCHES_HREF = '/releases/patches/'
+
+    def __init__(self, num_majors=2, include_patches=True,
+                 confirm_with_tags=True, tags_project=None, tags_token=None):
+        Releases.__init__(self, self.INDEX_URL)
+        self._num_majors = num_majors
+        self._include_patches = include_patches
+        self._confirm_with_tags = confirm_with_tags
+        self._tags_project = tags_project or self.TAGS_PROJECT
+        self._tags_token = tags_token
+        self._tag_dates = {}
+        self._debug = ARGS.debug
+        self._session = requests.Session()
+        self._session.headers.update({'User-Agent': 'Mozilla/5.0'})
+
+    @staticmethod
+    def _canonicalize(version):
+        if re.match(r'^\d+\.\d+$', version):
+            return version + '.0'
+        if re.match(r'^\d+\.\d+\.\d+$', version):
+            return version
+        return None
+
+    def _load_tag_dates(self):
+        if not self._confirm_with_tags:
+            return
+        since = self._last_date - datetime.timedelta(days=self.TAG_FUDGE_DAYS)
+        tags = GitLabTags(self._tags_project, self.TAGS_REGEX,
+                          token=self._tags_token)
+        print('> Fetching tag dates from GitLab project: {}'.format(self._tags_project))
+        try:
+            self._tag_dates = tags.date_map(since=since)
+        except Exception as e:
+            print('Warning: failed to fetch tag dates: {}'.format(e))
+            self._tag_dates = {}
+        self._print_debug('Tag dates loaded: {} entries'.format(len(self._tag_dates)))
+
+    def _fetch_soup(self, url):
+        self._print_debug('Requesting {}'.format(url))
+        try:
+            response = self._session.get(url, timeout=30)
+        except requests.exceptions.RequestException as e:
+            print('Error fetching {}: {}'.format(url, e))
+            return None
+
+        if not response.ok:
+            print('Error {} fetching {}'.format(response.status_code, url))
+            return None
+
+        return BeautifulSoup(response.text, 'html.parser')
+
+    def _section_urls(self):
+        print('> Requesting {}'.format(self.INDEX_URL))
+        soup = self._fetch_soup(self.INDEX_URL)
+        if not soup:
+            return []
+
+        majors = []
+        patches_url = None
+
+        for card in soup.find_all('a', class_='card-body'):
+            href = card.get('href', '')
+            if not href:
+                continue
+            major_match = self.MAJOR_HREF_RE.match(href)
+            if major_match:
+                majors.append((int(major_match.group(1)), urljoin(self.BASE_URL, href)))
+            elif href == self.PATCHES_HREF and self._include_patches:
+                patches_url = urljoin(self.BASE_URL, href)
+
+        majors.sort(key=lambda item: item[0], reverse=True)
+        urls = [url for _, url in majors[:self._num_majors]]
+        if patches_url:
+            urls.append(patches_url)
+
+        self._print_debug('Section URLs: {}'.format(urls))
+        return urls
+
+    def _section_releases(self, section_url):
+        print('> Requesting {}'.format(section_url))
+        soup = self._fetch_soup(section_url)
+        if not soup:
+            return []
+
+        results = []
+        for card in soup.find_all('a', class_='card-body'):
+            href = card.get('href', '')
+            if not href or href.endswith('/older/'):
+                continue
+
+            title_div = card.find('div', class_='card-title')
+            if not title_div:
+                continue
+
+            version = title_div.get('id') or ''
+            if not re.match(r'^\d+(?:\.\d+){1,2}$', version):
+                title_text = title_div.get_text(strip=True).replace('\xa0', ' ')
+                title_text = re.sub(r'^GitLab\s+', '', title_text)
+                version = title_text
+
+            if not version:
+                continue
+
+            results.append((version, urljoin(self.BASE_URL, href)))
+
+        return results
+
+    def _release_date(self, release_url):
+        soup = self._fetch_soup(release_url)
+        if not soup:
+            return None
+
+        text = soup.get_text(' ', strip=True)
+        match = self.DATE_RE.search(text)
+        if not match:
+            return None
+
+        return get_date(match.group(1), '%B %d, %Y')
+
+    def _date_from_tags(self, version):
+        primary = version.split(',')[0].strip()
+        canonical = self._canonicalize(primary)
+        if canonical and canonical in self._tag_dates:
+            return self._tag_dates[canonical]
+        return None
+
+    def get_releases(self):
+        self._load_tag_dates()
+        for section_url in self._section_urls():
+            for version, release_url in self._section_releases(section_url):
+                date = self._date_from_tags(version)
+                if date is not None:
+                    self._print_debug(
+                        'Tag date for {}: {}'.format(version, date))
+                else:
+                    date = self._release_date(release_url)
+                if date is None:
+                    self._print_debug(
+                        'No parseable date for {}, including it (assumed recent).'.format(release_url))
+                    self._releases[version] = release_url
+                    continue
+                if date < self._last_date:
+                    self._print_debug(
+                        'Stopping section {} at {} ({} < {})'.format(
+                            section_url, version, date, self._last_date))
+                    break
+                self._releases[version] = release_url
+
+
 class GitHubReleases(Releases):
     """
     Get releases from the GitHub Releases API.
@@ -449,20 +696,7 @@ RELEASES = {
     'GitHub Enterprise': HtmlNestedPage('https://enterprise.github.com/releases/',
                                         parent=['h3'],
                                         date={'elt': ['small', {'class': 'release-date'}], 'fmt': '%B %d, %Y'}),
-    'GitLab': MultiReleases([HtmlNestedPage('https://about.gitlab.com/blog/categories/releases/',
-                                            parent=['div', 'blog-hero-content'],
-                                            releases={'number': ['h2']},
-                                            date={'elt': ['a', 'blog-hero-more-link'],
-                                                  'link': True,
-                                                  'pattern': r'/(\d+/\d+/\d+)/',
-                                                  'fmt': '%Y/%m/%d'}),
-                             HtmlNestedPage('https://about.gitlab.com/blog/categories/releases/',
-                                            parent=['div', 'blog-card-content'],
-                                            releases={'number': ['h3']},
-                                            date={'elt': ['a', 'blog-card-title'],
-                                                  'link': True,
-                                                  'pattern': r'/(\d+/\d+/\d+)/',
-                                                  'fmt': '%Y/%m/%d'})]),
+    'GitLab': GitLabReleases(num_majors=2, include_patches=True),
     'Bitbucket Data Center': HtmlFlatPage('https://confluence.atlassian.com/bitbucketserver/release-notes-872139866.html',
                                           pattern=r'(\d+\.\d+)',
                                           releases={'number': ['h2']},
