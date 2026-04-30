@@ -695,6 +695,7 @@ RELEASES = {
     'libgit2sharp': GitHubTags('libgit2/libgit2sharp', r'^v(\d\.\d+\.?\d*)$'),
     'go-git': GitHubTags('go-git/go-git', r'^v(\d+\.\d+\.\d+(?:-[a-z]+\.?\d*)?)$'),
     'gitoxide': GitHubTags('GitoxideLabs/gitoxide', r'^v(\d+\.\d+\.\d+)$'),
+    'JGit': GitHubTags('eclipse-jgit/jgit', r'^v(\d+\.\d+\.\d+)\.\d+-r$'),
     'GitHub Enterprise': HtmlNestedPage('https://enterprise.github.com/releases/',
                                         parent=['h3'],
                                         date={'elt': ['small', {'class': 'release-date'}], 'fmt': '%B %d, %Y'}),
