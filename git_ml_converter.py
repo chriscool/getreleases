@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 from typing import Optional, List, Dict, Any
+from mail_threading import thread_sort
 
 class GitMLConverterError(Exception):
     """Custom exception for git-ml-converter errors."""
@@ -420,25 +421,9 @@ def convert_content_to_text(content: Any, source_name: str, output_file: Optiona
     output_lines.append("=" * 80)
     output_lines.append("")
 
-    # Group messages by thread
-    threads = []
-    current_thread = []
-
+    messages = thread_sort(messages)
     for msg in messages:
-        if not msg['is_reply'] and current_thread:
-            threads.append(current_thread)
-            current_thread = [msg]
-        else:
-            current_thread.append(msg)
-
-    if current_thread:
-        threads.append(current_thread)
-
-    # Format threads
-    for thread in threads:
-        for i, msg in enumerate(thread):
-            level = 1 if i > 0 and msg['is_reply'] else 0
-            output_lines.append(format_message(msg, level))
+        output_lines.append(format_message(msg, msg.get('_depth', 0)))
 
     output_text = '\n'.join(output_lines)
 
