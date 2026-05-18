@@ -173,6 +173,34 @@ def check_repo_up_to_date(repo_path: str, quiet: bool = False) -> None:
     except Exception as e:
         print(f"Warning: Could not parse repo date. {e}", file=out)
 
+def list_lei_externals() -> List[str]:
+    """Return the list of locations configured as lei externals.
+
+    Parses the output of `lei ls-external`, which yields one line per
+    external in the form '<path-or-url> boost=N'. Errors are swallowed
+    and an empty list is returned, so callers can treat missing/failing
+    lei the same as "no externals configured".
+    """
+    try:
+        result = subprocess.run(
+            ["lei", "ls-external"],
+            check=True, capture_output=True, text=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return []
+
+    externals: List[str] = []
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        # Strip trailing " boost=N" if present.
+        path = re.sub(r'\s+boost=\S+$', '', line)
+        if path:
+            externals.append(path)
+    return externals
+
+
 def fetch_lei_thread(input_id: str, repo_path: Optional[str] = None, quiet: bool = False) -> List[Dict[str, Any]]:
     """Fetches a thread using lei and parses the mbox output."""
     out = open(os.devnull, 'w') if quiet else sys.stdout
@@ -216,6 +244,12 @@ def fetch_lei_thread(input_id: str, repo_path: Optional[str] = None, quiet: bool
                 cmd.extend(["--only", repo_path])
             else:
                 print(f"Warning: Repo path '{repo_path}' does not exist.", file=sys.stderr)
+        else:
+            # No --repo was given, so lei will use its configured externals.
+            # Run a freshness check on each so the user is warned when the
+            # local public-inbox mirror is stale.
+            for ext in list_lei_externals():
+                check_repo_up_to_date(ext, quiet=quiet)
 
         cmd.append(final_query)
 
