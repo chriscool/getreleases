@@ -97,3 +97,41 @@ def thread_sort(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             ordered.append(m)
 
     return ordered
+
+
+def subtree_of(messages: List[Dict[str, Any]], parent_msgid: str) -> List[Dict[str, Any]]:
+    """Return the subtree of `messages` rooted at `parent_msgid`.
+
+    Runs thread_sort() on the input, locates the message whose normalized
+    Message-ID matches `parent_msgid`, and returns that message followed
+    by all its transitive descendants in DFS order. `_depth` is rebased
+    so the matched message is at depth 0.
+
+    Returns [] if `parent_msgid` is not present in the thread.
+    """
+    target = normalize_msgid(parent_msgid)
+    if not target:
+        return []
+
+    ordered = thread_sort(messages)
+
+    start = -1
+    for i, m in enumerate(ordered):
+        if normalize_msgid(m.get('id', '')) == target:
+            start = i
+            break
+
+    if start < 0:
+        return []
+
+    base = ordered[start].get('_depth', 0)
+    result: List[Dict[str, Any]] = [ordered[start]]
+    for m in ordered[start + 1:]:
+        if m.get('_depth', 0) <= base:
+            break
+        result.append(m)
+
+    for m in result:
+        m['_depth'] = m.get('_depth', 0) - base
+
+    return result

@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 from typing import Optional, List, Dict, Any
-from mail_threading import thread_sort
+from mail_threading import thread_sort, subtree_of
 
 class GitMLConverterError(Exception):
     """Custom exception for git-ml-converter errors."""
@@ -407,21 +407,36 @@ def format_message(message: Dict[str, Any], level: int = 0) -> str:
 # MAIN CONVERSION AND EXECUTION LOGIC
 # ==============================================================================
 
-def convert_content_to_text(content: Any, source_name: str, output_file: Optional[str] = None, is_mbox: bool = False) -> None:
+def convert_content_to_text(content: Any, source_name: str, output_file: Optional[str] = None,
+                            is_mbox: bool = False, replies_only: bool = False,
+                            parent_msgid: Optional[str] = None) -> None:
     """Takes content (HTML string or list of dicts) and converts it to formatted plain text."""
     if is_mbox:
         messages = content # Content is already parsed list of dicts
     else:
         messages = parse_git_ml_html(content)
 
+    if replies_only:
+        if not parent_msgid:
+            raise GitMLConverterError("--replies-only requires a Message-ID source.")
+        messages = subtree_of(messages, parent_msgid)
+        if not messages:
+            raise GitMLConverterError(
+                f"Message-ID '{parent_msgid}' not found in fetched thread."
+            )
+    else:
+        messages = thread_sort(messages)
+
     # Build thread structure
     output_lines = []
     output_lines.append(f"Git Mailing List Archive - Converted from {source_name}")
-    output_lines.append(f"Extracted {len(messages)} messages")
+    if replies_only:
+        output_lines.append(f"Extracted {len(messages)} messages (replies to <{parent_msgid}>)")
+    else:
+        output_lines.append(f"Extracted {len(messages)} messages")
     output_lines.append("=" * 80)
     output_lines.append("")
 
-    messages = thread_sort(messages)
     for msg in messages:
         output_lines.append(format_message(msg, msg.get('_depth', 0)))
 
@@ -443,25 +458,40 @@ def main() -> None:
     parser.add_argument('source', help='Input URL or local HTML file path')
     parser.add_argument('-o', '--output', help='Output text file (default: stdout)')
     parser.add_argument('--repo', help='Path to local public-inbox git archive (for lei)', default=None)
-    
+    parser.add_argument('--replies-only', action='store_true',
+                        help='Output only the specified message and its replies '
+                             '(rather than the full thread it belongs to).')
+
     args = parser.parse_args()
 
     content = None
     is_mbox = False
+    parent_msgid: Optional[str] = None
 
     # Check if the source is a URL or a file path
     if args.source.startswith('http://') or args.source.startswith('https://'):
+        if args.replies_only:
+            raise GitMLConverterError("--replies-only requires a Message-ID source (mbox input).")
         content = fetch_url_content(args.source)
     elif os.path.exists(args.source) and (args.source.endswith('.html') or args.source.endswith('.htm')):
+        if args.replies_only:
+            raise GitMLConverterError("--replies-only requires a Message-ID source (mbox input).")
         content = read_file_content(args.source)
     else:
         # Assume it's a Message-ID for lei
         content = fetch_lei_thread(args.source, args.repo)
         is_mbox = True
-    
+        if args.replies_only:
+            clean = args.source.strip()
+            if clean.lower().startswith("m:"):
+                clean = clean[2:]
+            parent_msgid = clean.strip('<> ')
+
     # Once content is fetched/read, convert it
     if content:
-        convert_content_to_text(content, args.source, args.output, is_mbox)
+        convert_content_to_text(content, args.source, args.output, is_mbox,
+                                replies_only=args.replies_only,
+                                parent_msgid=parent_msgid)
     else:
         raise GitMLConverterError(f"No content found for source '{args.source}'. Check if the ID is correct.")
 
