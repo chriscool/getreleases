@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 from typing import Optional, List, Dict, Any
-from mail_threading import thread_sort, subtree_of
+from mail_threading import thread_sort, subtree_of, format_overview
 
 class GitMLConverterError(Exception):
     """Custom exception for git-ml-converter errors."""
@@ -409,7 +409,8 @@ def format_message(message: Dict[str, Any], level: int = 0) -> str:
 
 def convert_content_to_text(content: Any, source_name: str, output_file: Optional[str] = None,
                             is_mbox: bool = False, replies_only: bool = False,
-                            parent_msgid: Optional[str] = None) -> None:
+                            parent_msgid: Optional[str] = None,
+                            overview: bool = False) -> None:
     """Takes content (HTML string or list of dicts) and converts it to formatted plain text."""
     if is_mbox:
         messages = content # Content is already parsed list of dicts
@@ -437,8 +438,15 @@ def convert_content_to_text(content: Any, source_name: str, output_file: Optiona
     output_lines.append("=" * 80)
     output_lines.append("")
 
-    for msg in messages:
-        output_lines.append(format_message(msg, msg.get('_depth', 0)))
+    if overview:
+        if replies_only:
+            header = f"Thread overview: {len(messages)} messages (replies to <{parent_msgid}>)"
+        else:
+            header = f"Thread overview: {len(messages)} messages"
+        output_lines.extend(format_overview(messages, header=header))
+    else:
+        for msg in messages:
+            output_lines.append(format_message(msg, msg.get('_depth', 0)))
 
     output_text = '\n'.join(output_lines)
 
@@ -461,6 +469,9 @@ def main() -> None:
     parser.add_argument('--replies-only', action='store_true',
                         help='Output only the specified message and its replies '
                              '(rather than the full thread it belongs to).')
+    parser.add_argument('--overview', action='store_true',
+                        help='Show a thread overview (one line per message) '
+                             'instead of full message bodies.')
 
     args = parser.parse_args()
 
@@ -491,7 +502,8 @@ def main() -> None:
     if content:
         convert_content_to_text(content, args.source, args.output, is_mbox,
                                 replies_only=args.replies_only,
-                                parent_msgid=parent_msgid)
+                                parent_msgid=parent_msgid,
+                                overview=args.overview)
     else:
         raise GitMLConverterError(f"No content found for source '{args.source}'. Check if the ID is correct.")
 

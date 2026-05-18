@@ -4,7 +4,8 @@
 """JWZ-style thread ordering helpers shared across getreleases scripts."""
 
 from collections import defaultdict
-from typing import Any, Dict, List
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 
 def normalize_msgid(value: str) -> str:
@@ -135,3 +136,49 @@ def subtree_of(messages: List[Dict[str, Any]], parent_msgid: str) -> List[Dict[s
         m['_depth'] = m.get('_depth', 0) - base
 
     return result
+
+
+def decode_header(value: str) -> str:
+    """Decode an RFC 2047 encoded email header value to a plain string."""
+    try:
+        from email.header import decode_header as _dh, make_header
+        return str(make_header(_dh(value)))
+    except Exception:
+        return value
+
+
+def parse_overview_date(date_str: str) -> str:
+    """Parse an RFC 2822 date string into YYYY-MM-DD, or return blanks on failure."""
+    from email.utils import parsedate
+    date_str = date_str.strip()
+    if not date_str:
+        return '          '
+    parsed = parsedate(date_str)
+    if parsed:
+        try:
+            return datetime(*parsed[:3]).strftime('%Y-%m-%d')
+        except Exception:
+            pass
+    return '          '
+
+
+def format_overview(messages: List[Dict[str, Any]], header: Optional[str] = None) -> List[str]:
+    """Return a list of plain-text lines rendering a thread overview.
+
+    Each entry is one line in the form
+        "  YYYY-MM-DD ` ` ` Subject Sender"
+    where the backtick-space indent reflects msg['_depth'] (set by
+    thread_sort or subtree_of). The returned list starts with `header`
+    (or a default "Thread overview: N messages") and a blank line.
+    """
+    if header is None:
+        header = f"Thread overview: {len(messages)} messages"
+    lines: List[str] = [header, ""]
+    for msg in messages:
+        subject = decode_header(msg.get('subject', '(No Subject)').strip())
+        sender = decode_header(msg.get('from', '').strip())
+        date_fmt = parse_overview_date(msg.get('date', ''))
+        depth = msg.get('_depth', 0)
+        indent = '` ' * depth
+        lines.append(f"  {date_fmt} {indent}{subject} {sender}")
+    return lines

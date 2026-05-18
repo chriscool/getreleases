@@ -21,7 +21,7 @@ except ImportError:
     sys.exit(1)
 
 import git_ml_converter
-from mail_threading import thread_sort
+from mail_threading import thread_sort, decode_header, parse_overview_date
 
 
 # --- Configuration ---
@@ -307,30 +307,6 @@ class MailingListStore:
 
         print(f"Filtered out: {dropped_counts['count']} by size, {dropped_counts['age']} by date.", file=sys.stderr)
         return valid_threads
-
-
-def _decode_header(value: str) -> str:
-    """Decode an RFC 2047 encoded email header value to a plain string."""
-    try:
-        from email.header import decode_header, make_header
-        return str(make_header(decode_header(value)))
-    except Exception:
-        return value
-
-
-def _parse_overview_date(date_str: str) -> str:
-    """Parse an RFC 2822 date string into YYYY-MM-DD, or return blanks on failure."""
-    from email.utils import parsedate
-    date_str = date_str.strip()
-    if not date_str:
-        return '          '
-    parsed = parsedate(date_str)
-    if parsed:
-        try:
-            return datetime(*parsed[:3]).strftime('%Y-%m-%d')
-        except Exception:
-            pass
-    return '          '
 
 
 class ThreadWorkspace:
@@ -669,9 +645,9 @@ class ThreadSelectorTUI:
         messages = self.ws.fetch_thread_overview(thread['root_mid'])
         if messages:
             msg = messages[min(self.ws.thread_cursor, len(messages) - 1)]
-            from_hdr = _decode_header(msg.get('from', ''))
+            from_hdr = decode_header(msg.get('from', ''))
             date_hdr = msg.get('date', '')
-            subject_hdr = _decode_header(msg.get('subject', ''))
+            subject_hdr = decode_header(msg.get('subject', ''))
             body_lines = [self._sanitize_for_curses(l[:preview_width-1]) for l in msg.get('body', [])]
         else:
             from_hdr = ''
@@ -734,9 +710,9 @@ class ThreadSelectorTUI:
 
         for idx in range(offset, min(len(messages), offset + available)):
             msg = messages[idx]
-            subject = _decode_header(msg.get('subject', '(No Subject)').strip())
-            sender = _decode_header(msg.get('from', '').strip())
-            date_fmt = _parse_overview_date(msg.get('date', ''))
+            subject = decode_header(msg.get('subject', '(No Subject)').strip())
+            sender = decode_header(msg.get('from', '').strip())
+            date_fmt = parse_overview_date(msg.get('date', ''))
 
             depth = msg.get('_depth', 0)
             indent = '` ' * depth
@@ -771,9 +747,9 @@ class ThreadSelectorTUI:
         """Return all plain-text entry strings for the thread overview."""
         result = []
         for msg in messages:
-            subject = _decode_header(msg.get('subject', '(No Subject)').strip())
-            sender = _decode_header(msg.get('from', '').strip())
-            date_fmt = _parse_overview_date(msg.get('date', ''))
+            subject = decode_header(msg.get('subject', '(No Subject)').strip())
+            sender = decode_header(msg.get('from', '').strip())
+            date_fmt = parse_overview_date(msg.get('date', ''))
             depth = msg.get('_depth', 0)
             indent = '` ' * depth
             result.append(self._sanitize_for_curses(f"  {date_fmt} {indent}{subject} {sender}"))
