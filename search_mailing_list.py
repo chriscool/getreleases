@@ -298,6 +298,22 @@ class MailingListStore:
                 msgs.sort(key=lambda x: x.get('dt', ''))
                 root_subject = msgs[0].get('s', '(No Subject)')
 
+                # Prefer the true thread root (``t_id``, which came from
+                # ``refs[0]`` of one of the messages) as ``root_mid`` when it
+                # is itself present in the bucket. If the actual root is
+                # older than the date window (``--max-age-days``), it will
+                # not be in ``msgs`` and we fall back to ``t_id`` anyway so
+                # that downstream ``lei q -t`` re-expansion still rehydrates
+                # the full thread, rather than only the subtree reachable
+                # from the earliest reply we happened to see.
+                root_msg = next((m for m in msgs if m.get('m') == t_id), None)
+                if root_msg is not None:
+                    root_mid = root_msg.get('m', '')
+                    root_blob = root_msg.get('blob', '')
+                else:
+                    root_mid = t_id
+                    root_blob = msgs[0].get('blob', '')
+
                 valid_threads.append({
                     'thread_id': t_id,
                     'subject': root_subject,
@@ -305,8 +321,8 @@ class MailingListStore:
                     'last_activity': last_email_date.strftime("%Y-%m-%d"),
                     'participants': len(participants),
                     'age_days': age,
-                    'blob': msgs[0].get('blob', ''),
-                    'root_mid': msgs[0].get('m', '')
+                    'blob': root_blob,
+                    'root_mid': root_mid
                 })
             else:
                 dropped_counts["age"] += 1
