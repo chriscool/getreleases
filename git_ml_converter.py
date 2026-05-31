@@ -216,19 +216,30 @@ def fetch_lei_thread(input_id: str, repo_path: Optional[str] = None, quiet: bool
         # Message-IDs always contain '@'; anything that isn't a full hex SHA is
         # also treated as a Message-ID (e.g. abbreviated hashes).
         if '@' in clean_str or not re.match(r'^[a-f0-9]{40}$', clean_str, re.IGNORECASE):
-            # Message-ID: strip optional 'm:' prefix and angle brackets, then
-            # quote to safely handle special characters like '+'.
-            if clean_str.lower().startswith("m:"):
+            # Message-ID: strip optional 'm:'/'mid:' prefix and angle brackets,
+            # then build a `mid:"..."` query.
+            #
+            # NOTE: we use the documented `mid:` Xapian prefix (see lei-q(1))
+            # rather than the legacy/alias `m:` prefix that earlier versions of
+            # this script used. With `m:"<...>"`, some Message-IDs containing
+            # characters like '=' (e.g. ProtonMail base64 IDs ending in
+            # "...=@proton.me") were not found even when the message was
+            # indexed locally. The documented `mid:"raw-id"` form (no angle
+            # brackets) handles these IDs reliably while remaining compatible
+            # with the IDs that already worked.
+            if clean_str.lower().startswith("mid:"):
+                clean_str = clean_str[4:]
+            elif clean_str.lower().startswith("m:"):
                 clean_str = clean_str[2:]
             raw_id = clean_str.strip('<> ')
-            final_query = f'm:"<{raw_id}>"'
+            final_query = f'mid:"{raw_id}"'
         else:
             # Full 40-char blob SHA: resolve to a Message-ID via git-show first,
-            # then query by that ID.
+            # then query by that ID. Same `mid:` prefix as above.
             msg_id = get_msgid_from_blob(clean_str, repo_path)
             if not msg_id:
                 raise GitMLConverterError("Failed to resolve Blob ID to Message-ID.")
-            final_query = f'm:"<{msg_id}>"'
+            final_query = f'mid:"{msg_id}"'
 
         print(f"Fetching thread via query: {final_query}", file=out)
 
