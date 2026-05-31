@@ -1148,8 +1148,13 @@ class ThreadProcessor:
             print(f"Fetching thread {mid}: {subject}", file=sys.stderr)
             try:
                 messages = git_ml_converter.fetch_lei_thread(mid, self.repo_path)
-                git_ml_converter.convert_content_to_text(messages, mid, output_path, is_mbox=True)
-                if t:
+                # convert_content_to_text returns False (and warns to stderr,
+                # plus writes a labelled EMPTY placeholder) when there are no
+                # messages to write; only record the thread in the index when
+                # a real, non-empty file was produced.
+                written = git_ml_converter.convert_content_to_text(
+                    messages, mid, output_path, is_mbox=True)
+                if written and t:
                     processed_threads.append(t)
             except git_ml_converter.GitMLConverterError as e:
                 print(f"Error: Failed to fetch thread {mid}: {e}", file=sys.stderr)

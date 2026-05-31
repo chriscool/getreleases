@@ -455,8 +455,19 @@ def format_message(message: Dict[str, Any], level: int = 0) -> str:
 def convert_content_to_text(content: Any, source_name: str, output_file: Optional[str] = None,
                             is_mbox: bool = False, replies_only: bool = False,
                             parent_msgid: Optional[str] = None,
-                            overview: bool = False) -> None:
-    """Takes content (HTML string or list of dicts) and converts it to formatted plain text."""
+                            overview: bool = False) -> bool:
+    """Takes content (HTML string or list of dicts) and converts it to formatted plain text.
+
+    Returns True if a non-empty conversion was produced, False if there were
+    no messages to convert.
+
+    When the message list is empty (e.g. because the Message-ID is not in the
+    configured local mirror), a warning is printed to stderr and a clearly
+    labelled "EMPTY" stub file is still written. The stub makes the failure
+    obvious to anyone reading the file later, even if the stderr warning was
+    missed at the time of the run. Callers can use the False return value to
+    avoid recording such stubs in any downstream index.
+    """
     if is_mbox:
         messages = content # Content is already parsed list of dicts
     else:
@@ -472,6 +483,41 @@ def convert_content_to_text(content: Any, source_name: str, output_file: Optiona
             )
     else:
         messages = thread_sort(messages)
+
+    # Empty result handling: warn to stderr AND write a clearly labelled
+    # placeholder so the problem is visible both at run time (the warning)
+    # and later when someone opens the file (the "EMPTY" banner). We still
+    # return False so callers (e.g. ThreadProcessor) can avoid recording the
+    # file in the index as a successful conversion.
+    if not messages:
+        print(f"Warning: no messages found for {source_name}; "
+              f"writing EMPTY placeholder.", file=sys.stderr)
+
+        placeholder_lines = [
+            f"Git Mailing List Archive - Converted from {source_name}",
+            "Extracted 0 messages",
+            "=" * 80,
+            "",
+            "*** EMPTY -- message not in repo ***",
+            "",
+            "No messages were returned by the lei query for this Message-ID.",
+            "This typically means the Message-ID is not present in the",
+            "configured local public-inbox mirror (it may live in a different",
+            "mirror, may not have reached the public-inbox archive, or the",
+            "mirror may need to be updated).",
+            "",
+        ]
+        placeholder = "\n".join(placeholder_lines)
+
+        if output_file:
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(placeholder)
+            print(f"Wrote EMPTY placeholder: {source_name} -> {output_file}",
+                  file=sys.stderr)
+        else:
+            print(placeholder)
+
+        return False
 
     # Build thread structure
     output_lines = []
@@ -502,6 +548,8 @@ def convert_content_to_text(content: Any, source_name: str, output_file: Optiona
         print(f"Successfully converted {source_name} -> {output_file}")
     else:
         print(output_text)
+
+    return True
 
 def main() -> None:
     """Parses command-line arguments and runs the conversion."""
