@@ -223,16 +223,22 @@ class MailingListStore:
             return (datetime.now() - dt).days < 1
         return False
 
-    def get_lei_results(self) -> List[Dict[str, Any]]:
-        """Executes lei q to find candidate messages."""
+    def get_lei_results(self, repo_path: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Executes lei q to find candidate messages.
+
+        When ``repo_path`` is provided, the query is restricted to that
+        external via ``--only``. This avoids pulling messages from unrelated
+        externals (e.g. a separate ``tools-kernel-org-public-inbox`` mirror)
+        that would later turn into empty thread files because the chosen
+        conversion mirror (``get_repo_path()``, used by
+        :class:`ThreadProcessor`) does not contain them.
+        """
         date_query = f"d:{self.max_age_days}.days.ago..{self.min_age_days}.days.ago"
 
-        cmd = [
-            "lei", "q",
-            "-t",
-            "-f", "json",
-            date_query
-        ]
+        cmd = ["lei", "q", "-t", "-f", "json"]
+        if repo_path:
+            cmd.extend(["--only", repo_path])
+        cmd.append(date_query)
 
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -1279,8 +1285,16 @@ def main():
     check_and_manage_environment()
 
     store = MailingListStore()
+
+    # Determine the mirror we will use for conversion up-front, so the same
+    # mirror is also used for the candidate query. Without this, the query
+    # would search every configured lei external and could return messages
+    # that the conversion mirror does not contain, producing empty thread
+    # files. See `MailingListStore.get_lei_results` for details.
+    repo_path = store.get_repo_path()
+
     try:
-        messages = store.get_lei_results()
+        messages = store.get_lei_results(repo_path=repo_path)
     except RuntimeError as e:
         print(e, file=sys.stderr)
         sys.exit(1)
@@ -1299,7 +1313,6 @@ def main():
     threads_dir = find_or_create_threads_dir(edition)
     existing_index = load_index(threads_dir)
 
-    repo_path = store.get_repo_path()
     tui = ThreadSelectorTUI(summarizable_threads, repo_path,
                             edition=edition, done_mids=existing_index['done_mids'])
     selected_mids = tui.run()
