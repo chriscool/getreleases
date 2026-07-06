@@ -14,7 +14,7 @@ supported software.
 
 Currently supports : Git, Git for Windows, libgit2, libgit2sharp,
 GitHub Enterprise, GitLab, Bitbucket, GitKraken, GitHub Desktop,
-tig, Sourcetree, git-credential-azure, git-credential-oauth.
+tig, Sourcetree, git-credential-azure, git-credential-oauth, Grit.
 
 To get help about all the supported options, this should be used
 like this:
@@ -746,6 +746,7 @@ RELEASES = {
     'libgit2sharp': GitHubTags('libgit2/libgit2sharp', r'^v(\d\.\d+\.?\d*)$'),
     'go-git': GitHubTags('go-git/go-git', r'^v(\d+\.\d+\.\d+(?:-[a-z]+\.?\d*)?)$'),
     'gitoxide': GitHubTags('GitoxideLabs/gitoxide', r'^v(\d+\.\d+\.\d+)$'),
+    'Grit': GitHubTags('gitbutlerapp/grit', r'^v(\d+\.\d+\.\d+)$'),
     'JGit': GitHubTags('eclipse-jgit/jgit', r'^v(\d+\.\d+\.\d+)\.\d+-r$'),
     'GitHub Enterprise': HtmlNestedPage('https://enterprise.github.com/releases/',
                                         parent=['h3'],
