@@ -13,8 +13,12 @@ This works by parsing a release page or a tag page for each
 supported software.
 
 Currently supports : Git, Git for Windows, libgit2, libgit2sharp,
-GitHub Enterprise, GitLab, Bitbucket, GitKraken, GitHub Desktop,
-tig, Sourcetree, git-credential-azure, git-credential-oauth, Grit.
+go-git, gitoxide, Grit, JGit, GitHub Enterprise, GitLab, Gitea,
+public-inbox, Bitbucket Data Center, Gerrit Code Review, GitKraken,
+GitHub Desktop, Sourcetree, tig, lazygit, gitui, Garden, Git Cola,
+GitButler, Sublime Merge, delta, difftastic, Kinetic Merge,
+git-credential-azure, git-credential-oauth, git-lfs, b4,
+git-filter-repo, git-branchless, git-bug.
 
 To get help about all the supported options, this should be used
 like this:
